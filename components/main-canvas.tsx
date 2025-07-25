@@ -1,16 +1,15 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useRef, useCallback, useEffect } from "react"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip"
+import { Button } from "@/components/ui/button"
+import { RotateCcw, ZoomIn, ZoomOut, Maximize } from "lucide-react"
 
 interface CanvasState {
   zoom: number
   panX: number
   panY: number
-  isDragging: boolean
-  dragStart: { x: number; y: number }
 }
 
 export function MainCanvas() {
@@ -19,275 +18,259 @@ export function MainCanvas() {
     zoom: 1,
     panX: 0,
     panY: 0,
-    isDragging: false,
-    dragStart: { x: 0, y: 0 },
   })
-
-  const [hoveredSeat, setHoveredSeat] = useState<{ row: string; seat: number; category: string; price: string } | null>(
-    null,
-  )
+  const [isDragging, setIsDragging] = useState(false)
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
+  const [lastPan, setLastPan] = useState({ x: 0, y: 0 })
 
   // Handle mouse wheel zoom
-  const handleWheel = useCallback((e: WheelEvent) => {
-    e.preventDefault()
+  const handleWheel = useCallback(
+    (e: WheelEvent) => {
+      e.preventDefault()
 
-    const rect = canvasRef.current?.getBoundingClientRect()
-    if (!rect) return
+      if (!canvasRef.current) return
 
-    const mouseX = e.clientX - rect.left
-    const mouseY = e.clientY - rect.top
+      const rect = canvasRef.current.getBoundingClientRect()
+      const mouseX = e.clientX - rect.left
+      const mouseY = e.clientY - rect.top
 
-    setCanvasState((prev) => {
       const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1
-      const newZoom = Math.max(0.1, Math.min(5, prev.zoom * zoomFactor))
+      const newZoom = Math.min(Math.max(canvasState.zoom * zoomFactor, 0.1), 5)
 
-      // Calculate new pan to zoom towards mouse position
-      const zoomRatio = newZoom / prev.zoom
-      const newPanX = mouseX - (mouseX - prev.panX) * zoomRatio
-      const newPanY = mouseY - (mouseY - prev.panY) * zoomRatio
+      // Zoom towards mouse position
+      const zoomRatio = newZoom / canvasState.zoom
+      const newPanX = mouseX - (mouseX - canvasState.panX) * zoomRatio
+      const newPanY = mouseY - (mouseY - canvasState.panY) * zoomRatio
 
-      return {
-        ...prev,
+      setCanvasState({
         zoom: newZoom,
         panX: newPanX,
         panY: newPanY,
-      }
-    })
-  }, [])
+      })
+    },
+    [canvasState],
+  )
 
   // Handle mouse down for panning
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (e.button === 0) {
-      // Left mouse button
-      setCanvasState((prev) => ({
-        ...prev,
-        isDragging: true,
-        dragStart: { x: e.clientX - prev.panX, y: e.clientY - prev.panY },
-      }))
-    }
-  }, [])
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      if (e.target !== canvasRef.current) return
+
+      setIsDragging(true)
+      setDragStart({ x: e.clientX, y: e.clientY })
+      setLastPan({ x: canvasState.panX, y: canvasState.panY })
+    },
+    [canvasState.panX, canvasState.panY],
+  )
 
   // Handle mouse move for panning
   const handleMouseMove = useCallback(
-    (e: React.MouseEvent) => {
-      if (canvasState.isDragging) {
-        setCanvasState((prev) => ({
-          ...prev,
-          panX: e.clientX - prev.dragStart.x,
-          panY: e.clientY - prev.dragStart.y,
-        }))
-      }
+    (e: MouseEvent) => {
+      if (!isDragging) return
+
+      const deltaX = e.clientX - dragStart.x
+      const deltaY = e.clientY - dragStart.y
+
+      setCanvasState((prev) => ({
+        ...prev,
+        panX: lastPan.x + deltaX,
+        panY: lastPan.y + deltaY,
+      }))
     },
-    [canvasState.isDragging],
+    [isDragging, dragStart, lastPan],
   )
 
-  // Handle mouse up to stop panning
+  // Handle mouse up
   const handleMouseUp = useCallback(() => {
-    setCanvasState((prev) => ({
-      ...prev,
-      isDragging: false,
-    }))
+    setIsDragging(false)
   }, [])
 
-  // Add event listeners
+  // Add global mouse event listeners
+  useEffect(() => {
+    if (isDragging) {
+      document.addEventListener("mousemove", handleMouseMove)
+      document.addEventListener("mouseup", handleMouseUp)
+
+      return () => {
+        document.removeEventListener("mousemove", handleMouseMove)
+        document.removeEventListener("mouseup", handleMouseUp)
+      }
+    }
+  }, [isDragging, handleMouseMove, handleMouseUp])
+
+  // Add wheel event listener
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas) return
-
-    canvas.addEventListener("wheel", handleWheel, { passive: false })
-
-    return () => {
-      canvas.removeEventListener("wheel", handleWheel)
+    if (canvas) {
+      canvas.addEventListener("wheel", handleWheel, { passive: false })
+      return () => canvas.removeEventListener("wheel", handleWheel)
     }
   }, [handleWheel])
 
-  // Handle global mouse events for panning
-  useEffect(() => {
-    if (canvasState.isDragging) {
-      const handleGlobalMouseMove = (e: MouseEvent) => {
-        setCanvasState((prev) => ({
-          ...prev,
-          panX: e.clientX - prev.dragStart.x,
-          panY: e.clientY - prev.dragStart.y,
-        }))
-      }
-
-      const handleGlobalMouseUp = () => {
-        setCanvasState((prev) => ({
-          ...prev,
-          isDragging: false,
-        }))
-      }
-
-      document.addEventListener("mousemove", handleGlobalMouseMove)
-      document.addEventListener("mouseup", handleGlobalMouseUp)
-
-      return () => {
-        document.removeEventListener("mousemove", handleGlobalMouseMove)
-        document.removeEventListener("mouseup", handleGlobalMouseUp)
-      }
-    }
-  }, [canvasState.isDragging])
-
-  const handleSeatHover = (row: string, seat: number) => {
-    setHoveredSeat({
-      row,
-      seat,
-      category: "VIP",
-      price: "$150",
-    })
-  }
-
-  const handleSeatLeave = () => {
-    setHoveredSeat(null)
-  }
-
-  // Reset zoom and pan
+  // Reset canvas view
   const resetView = () => {
-    setCanvasState({
-      zoom: 1,
-      panX: 0,
-      panY: 0,
-      isDragging: false,
-      dragStart: { x: 0, y: 0 },
-    })
+    setCanvasState({ zoom: 1, panX: 0, panY: 0 })
   }
 
-  // Zoom to fit
-  const zoomToFit = () => {
+  // Zoom functions
+  const zoomIn = () => {
     setCanvasState((prev) => ({
       ...prev,
-      zoom: 0.8,
-      panX: 0,
-      panY: 0,
+      zoom: Math.min(prev.zoom * 1.2, 5),
     }))
   }
 
+  const zoomOut = () => {
+    setCanvasState((prev) => ({
+      ...prev,
+      zoom: Math.max(prev.zoom / 1.2, 0.1),
+    }))
+  }
+
+  const fitToScreen = () => {
+    // Implementation would calculate optimal zoom and pan to fit all content
+    setCanvasState({ zoom: 0.8, panX: 0, panY: 0 })
+  }
+
+  // Generate sample seats
+  const generateSeats = () => {
+    const seats = []
+    const rows = ["A", "B", "C", "D", "E", "F", "G", "H"]
+
+    for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+      for (let seatIndex = 1; seatIndex <= 12; seatIndex++) {
+        const x = 200 + seatIndex * 35
+        const y = 200 + rowIndex * 40
+        const seatId = `${rows[rowIndex]}${seatIndex}`
+
+        seats.push(
+          <Tooltip key={seatId}>
+            <TooltipTrigger asChild>
+              <div
+                className="absolute w-6 h-6 bg-blue-500 rounded border border-blue-400 cursor-pointer hover:bg-blue-400 hover:scale-110 transition-all duration-200"
+                style={{
+                  left: x,
+                  top: y,
+                }}
+                onMouseDown={(e) => e.stopPropagation()}
+              />
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Seat: {seatId}</p>
+              <p>Category: VIP</p>
+              <p>Price: $150</p>
+            </TooltipContent>
+          </Tooltip>,
+        )
+      }
+    }
+
+    return seats
+  }
+
+  const gridSize = 20 * canvasState.zoom
+  const gridOffsetX = canvasState.panX % gridSize
+  const gridOffsetY = canvasState.panY % gridSize
+
   return (
-    <TooltipProvider>
-      <main className="flex-1 bg-gray-900 relative overflow-hidden">
-        {/* Canvas Area */}
+    <main className="flex-1 bg-gray-900 relative overflow-hidden">
+      {/* Tooltip Provider */}
+      <TooltipProvider>
+        {/* Canvas Container */}
         <div
           ref={canvasRef}
-          className={`absolute inset-0 bg-gray-850 ${canvasState.isDragging ? "cursor-grabbing" : "cursor-grab"}`}
+          className={`w-full h-full relative ${isDragging ? "cursor-grabbing" : "cursor-grab"}`}
           onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          style={{ touchAction: "none" }}
+          style={{
+            backgroundImage: `
+              linear-gradient(to right, rgba(75, 85, 99, 0.3) 1px, transparent 1px),
+              linear-gradient(to bottom, rgba(75, 85, 99, 0.3) 1px, transparent 1px)
+            `,
+            backgroundSize: `${gridSize}px ${gridSize}px`,
+            backgroundPosition: `${gridOffsetX}px ${gridOffsetY}px`,
+          }}
         >
-          {/* Grid Background */}
+          {/* Canvas Content */}
           <div
-            className="absolute inset-0 opacity-20"
-            style={{
-              backgroundImage: `
-                linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)
-              `,
-              backgroundSize: `${20 * canvasState.zoom}px ${20 * canvasState.zoom}px`,
-              backgroundPosition: `${canvasState.panX}px ${canvasState.panY}px`,
-            }}
-          />
-
-          {/* Main Content Container */}
-          <div
-            className="absolute inset-0 flex items-center justify-center"
+            className="absolute inset-0 origin-top-left"
             style={{
               transform: `translate(${canvasState.panX}px, ${canvasState.panY}px) scale(${canvasState.zoom})`,
-              transformOrigin: "0 0",
             }}
           >
-            <div className="relative">
-              {/* Draggable Stage */}
-              <div
-                className="w-96 h-16 bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg mb-8 flex items-center justify-center cursor-move hover:shadow-lg transition-shadow select-none"
-                draggable
-                onDragStart={(e) => {
-                  e.dataTransfer.setData("text/plain", "stage")
-                }}
-                onMouseDown={(e) => e.stopPropagation()} // Prevent canvas panning when dragging stage
-              >
-                <span className="text-white font-semibold">STAGE</span>
-              </div>
-
-              {/* Sample Seat Layout */}
-              <div className="space-y-2">
-                {Array.from({ length: 8 }, (_, rowIndex) => (
-                  <div key={rowIndex} className="flex space-x-2 justify-center">
-                    {Array.from({ length: 12 }, (_, seatIndex) => {
-                      const row = String.fromCharCode(65 + rowIndex) // A, B, C...
-                      const seatNumber = seatIndex + 1
-                      const seatId = `${row}${seatNumber}`
-
-                      return (
-                        <Tooltip key={seatIndex}>
-                          <TooltipTrigger asChild>
-                            <div
-                              className={`w-6 h-6 rounded cursor-pointer transition-all duration-200 border border-gray-500 hover:scale-110 hover:shadow-md select-none ${
-                                Math.random() > 0.7
-                                  ? "bg-red-500 hover:bg-red-400"
-                                  : Math.random() > 0.5
-                                    ? "bg-green-500 hover:bg-green-400"
-                                    : "bg-gray-600 hover:bg-gray-500"
-                              }`}
-                              onMouseEnter={() => handleSeatHover(row, seatNumber)}
-                              onMouseLeave={handleSeatLeave}
-                              onMouseDown={(e) => e.stopPropagation()} // Prevent canvas panning when clicking seats
-                            />
-                          </TooltipTrigger>
-                          <TooltipContent side="top" className="bg-gray-800 border-gray-600">
-                            <div className="text-xs">
-                              <div className="font-semibold">Seat: {seatId}</div>
-                              <div>Category: VIP</div>
-                              <div>Price: $150</div>
-                            </div>
-                          </TooltipContent>
-                        </Tooltip>
-                      )
-                    })}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Canvas Controls */}
-          <div className="absolute top-4 right-4 bg-gray-800/90 rounded-lg p-2 border border-gray-700 space-y-2">
-            <button
-              onClick={resetView}
-              className="block w-full text-xs text-gray-300 hover:text-white px-2 py-1 rounded hover:bg-gray-700 transition-colors"
+            {/* Stage */}
+            <div
+              className="absolute bg-gradient-to-b from-purple-600 to-purple-800 rounded-lg shadow-lg cursor-move hover:shadow-xl transition-shadow duration-200 flex items-center justify-center"
+              style={{
+                left: 250,
+                top: 50,
+                width: 300,
+                height: 80,
+              }}
+              onMouseDown={(e) => e.stopPropagation()}
             >
-              Reset View
-            </button>
-            <button
-              onClick={zoomToFit}
-              className="block w-full text-xs text-gray-300 hover:text-white px-2 py-1 rounded hover:bg-gray-700 transition-colors"
-            >
-              Zoom to Fit
-            </button>
-          </div>
-
-          {/* Canvas Info */}
-          <div className="absolute top-4 left-4 bg-gray-800/80 rounded-lg p-3 border border-gray-700">
-            <div className="text-xs text-gray-300 space-y-1">
-              <div>Canvas: 1200 x 800</div>
-              <div>Grid: {Math.round(20 * canvasState.zoom)}px</div>
-              <div>Zoom: {Math.round(canvasState.zoom * 100)}%</div>
-              <div>
-                Pan: {Math.round(canvasState.panX)}, {Math.round(canvasState.panY)}
-              </div>
+              <span className="text-white font-semibold text-lg">STAGE</span>
             </div>
-          </div>
 
-          {/* Instructions */}
-          <div className="absolute bottom-4 left-4 bg-gray-800/80 rounded-lg p-3 border border-gray-700">
-            <div className="text-xs text-gray-400 space-y-1">
-              <div>🖱️ Mouse wheel: Zoom</div>
-              <div>🖱️ Click + drag: Pan</div>
-              <div>🎯 Hover seats: Details</div>
-            </div>
+            {/* Sample Seats */}
+            {generateSeats()}
           </div>
         </div>
-      </main>
-    </TooltipProvider>
+
+        {/* Canvas Controls */}
+        <div className="absolute bottom-4 left-4 flex flex-col space-y-2">
+          <div className="bg-gray-800 rounded-lg p-2 shadow-lg">
+            <div className="flex space-x-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={zoomOut}
+                className="h-8 w-8 p-0 text-gray-300 hover:bg-gray-700"
+              >
+                <ZoomOut className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={zoomIn}
+                className="h-8 w-8 p-0 text-gray-300 hover:bg-gray-700"
+              >
+                <ZoomIn className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={resetView}
+                className="h-8 w-8 p-0 text-gray-300 hover:bg-gray-700"
+              >
+                <RotateCcw className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={fitToScreen}
+                className="h-8 w-8 p-0 text-gray-300 hover:bg-gray-700"
+              >
+                <Maximize className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
+          <div className="bg-gray-800 rounded px-3 py-1 text-xs text-gray-300">
+            <div>Zoom: {Math.round(canvasState.zoom * 100)}%</div>
+            <div>Grid: {Math.round(gridSize)}px</div>
+          </div>
+
+          <div className="text-xs text-gray-500">
+            <div>Mouse wheel: Zoom</div>
+            <div>Click + drag: Pan</div>
+          </div>
+        </div>
+
+        {/* Zoom Display */}
+        <div className="absolute top-4 right-4 bg-gray-800 rounded px-3 py-1 text-sm text-gray-300">
+          {Math.round(canvasState.zoom * 100)}%
+        </div>
+      </TooltipProvider>
+    </main>
   )
 }
