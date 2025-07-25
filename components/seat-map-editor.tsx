@@ -1,75 +1,34 @@
-import {
-  Settings,
-  Square,
-  Circle,
-  Move,
-  RotateCw,
-  Copy,
-  Trash2,
-  ZoomIn,
-  ZoomOut,
-  Grid,
-  Save,
-  Undo,
-  Redo,
-  Menu,
-  Bell,
-  User,
-} from "lucide-react"
+"use client"
+
+import { useState } from "react"
+import { Settings, Save, Undo, Redo, Menu, Bell, User, ZoomIn, ZoomOut, Grid, RotateCcw, Maximize } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
+import { LeftSidebar } from "./left-sidebar"
 import { RightSidebar } from "./right-sidebar"
-
-function LeftSidebar() {
-  return (
-    <aside className="w-16 bg-gray-800 border-r border-gray-700 flex flex-col items-center py-4 space-y-2">
-      <div className="text-xs text-gray-400 mb-2">TOOLS</div>
-
-      <Button variant="ghost" size="sm" className="w-10 h-10 p-0 bg-blue-600 hover:bg-blue-700">
-        <Move className="h-4 w-4" />
-      </Button>
-
-      <Button variant="ghost" size="sm" className="w-10 h-10 p-0">
-        <Square className="h-4 w-4" />
-      </Button>
-
-      <Button variant="ghost" size="sm" className="w-10 h-10 p-0">
-        <Circle className="h-4 w-4" />
-      </Button>
-
-      <Button variant="ghost" size="sm" className="w-10 h-10 p-0">
-        <RotateCw className="h-4 w-4" />
-      </Button>
-
-      <Separator className="w-8 bg-gray-600" />
-
-      <Button variant="ghost" size="sm" className="w-10 h-10 p-0">
-        <Copy className="h-4 w-4" />
-      </Button>
-
-      <Button variant="ghost" size="sm" className="w-10 h-10 p-0">
-        <Trash2 className="h-4 w-4" />
-      </Button>
-
-      <Separator className="w-8 bg-gray-600" />
-
-      <Button variant="ghost" size="sm" className="w-10 h-10 p-0">
-        <ZoomIn className="h-4 w-4" />
-      </Button>
-
-      <Button variant="ghost" size="sm" className="w-10 h-10 p-0">
-        <ZoomOut className="h-4 w-4" />
-      </Button>
-
-      <Button variant="ghost" size="sm" className="w-10 h-10 p-0">
-        <Grid className="h-4 w-4" />
-      </Button>
-    </aside>
-  )
-}
+import { MainCanvas } from "./main-canvas"
 
 export function SeatMapEditor() {
+  const [mapName, setMapName] = useState("Main Theater Layout")
+  const [selectedTool, setSelectedTool] = useState("select")
+  const [selectionType, setSelectionType] = useState<"none" | "row" | "seat" | "shape">("none")
+  const [selectedCount, setSelectedCount] = useState(0)
+  const [zoom, setZoom] = useState(100)
+
+  const handleZoomIn = () => {
+    setZoom((prev) => Math.min(500, prev + 25))
+  }
+
+  const handleZoomOut = () => {
+    setZoom((prev) => Math.max(10, prev - 25))
+  }
+
+  const handleResetZoom = () => {
+    setZoom(100)
+  }
+
   return (
     <div className="h-screen bg-gray-900 text-white flex flex-col">
       {/* Header Bar */}
@@ -78,9 +37,13 @@ export function SeatMapEditor() {
           <Button variant="ghost" size="sm">
             <Menu className="h-4 w-4" />
           </Button>
-          <h1 className="text-lg font-semibold">Seat Map Editor</h1>
+          <Input
+            value={mapName}
+            onChange={(e) => setMapName(e.target.value)}
+            className="bg-transparent border-none text-lg font-semibold text-white focus:bg-gray-700 focus:border-gray-600 w-64"
+          />
           <Badge variant="secondary" className="bg-blue-600 text-white">
-            Venue Layout v2.1
+            v2.1
           </Badge>
         </div>
 
@@ -92,8 +55,9 @@ export function SeatMapEditor() {
             <Redo className="h-4 w-4" />
           </Button>
           <Separator orientation="vertical" className="h-6 bg-gray-600" />
-          <Button variant="ghost" size="sm">
-            <Save className="h-4 w-4" />
+          <Button className="bg-blue-600 hover:bg-blue-700" size="sm">
+            <Save className="h-4 w-4 mr-2" />
+            Save
           </Button>
           <Button variant="ghost" size="sm">
             <Settings className="h-4 w-4" />
@@ -110,72 +74,13 @@ export function SeatMapEditor() {
       {/* Main Layout Container */}
       <div className="flex-1 flex">
         {/* Left Sidebar - Tools */}
-        <LeftSidebar />
+        <LeftSidebar selectedTool={selectedTool} setSelectedTool={setSelectedTool} />
 
         {/* Main Content Area */}
-        <main className="flex-1 bg-gray-900 relative overflow-hidden">
-          {/* Canvas Area */}
-          <div className="absolute inset-0 bg-gray-850">
-            {/* Grid Background */}
-            <div
-              className="absolute inset-0 opacity-20"
-              style={{
-                backgroundImage: `
-                  linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px),
-                  linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)
-                `,
-                backgroundSize: "20px 20px",
-              }}
-            />
-
-            {/* Sample Seat Layout */}
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="relative">
-                {/* Stage */}
-                <div className="w-96 h-16 bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg mb-8 flex items-center justify-center">
-                  <span className="text-white font-semibold">STAGE</span>
-                </div>
-
-                {/* Seat Rows */}
-                <div className="space-y-2">
-                  {Array.from({ length: 8 }, (_, rowIndex) => (
-                    <div key={rowIndex} className="flex space-x-2 justify-center">
-                      {Array.from({ length: 12 }, (_, seatIndex) => (
-                        <div
-                          key={seatIndex}
-                          className={`w-6 h-6 rounded ${
-                            Math.random() > 0.7 ? "bg-red-500" : Math.random() > 0.5 ? "bg-green-500" : "bg-gray-600"
-                          } border border-gray-500 cursor-pointer hover:scale-110 transition-transform`}
-                        />
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Zoom Controls */}
-            <div className="absolute bottom-4 left-4 bg-gray-800 rounded-lg p-2 border border-gray-700">
-              <div className="text-xs text-gray-400 mb-1">Zoom: 100%</div>
-              <div className="flex space-x-1">
-                <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                  <ZoomOut className="h-3 w-3" />
-                </Button>
-                <div className="w-16 h-6 bg-gray-700 rounded flex items-center justify-center">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full" />
-                </div>
-                <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                  <ZoomIn className="h-3 w-3" />
-                </Button>
-              </div>
-            </div>
-          </div>
-        </main>
+        <MainCanvas />
 
         {/* Right Sidebar - Inspector Panel */}
-        <aside className="w-80 bg-gray-800 border-l border-gray-700 flex flex-col">
-          <RightSidebar />
-        </aside>
+        <RightSidebar selectionType={selectionType} selectedCount={selectedCount} />
       </div>
 
       {/* Status Bar */}
@@ -190,9 +95,27 @@ export function SeatMapEditor() {
         </div>
 
         <div className="flex items-center space-x-4">
+          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleZoomOut}>
+            <ZoomOut className="h-3 w-3" />
+          </Button>
+          <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={handleResetZoom}>
+            {zoom}%
+          </Button>
+          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleZoomIn}>
+            <ZoomIn className="h-3 w-3" />
+          </Button>
+          <Separator orientation="vertical" className="h-4 bg-gray-600" />
+          <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+            <Grid className="h-3 w-3" />
+          </Button>
           <span>Grid: 20px</span>
           <span>Snap: On</span>
-          <span>Zoom: 100%</span>
+          <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+            <RotateCcw className="h-3 w-3" />
+          </Button>
+          <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+            <Maximize className="h-3 w-3" />
+          </Button>
         </div>
       </footer>
     </div>
