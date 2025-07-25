@@ -2,7 +2,6 @@
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Separator } from "@/components/ui/separator"
 import {
   AlignLeft,
   AlignCenter,
@@ -10,18 +9,16 @@ import {
   AlignVerticalJustifyStart,
   AlignVerticalJustifyCenter,
   AlignVerticalJustifyEnd,
-  AlignHorizontalDistributeEndIcon as DistributeHorizontal,
-  AlignVerticalDistributeEndIcon as DistributeVertical,
   Move,
   ArrowUp,
   ArrowDown,
-  ChevronUp,
-  ChevronDown,
+  RotateCw,
+  ShareIcon as Distribute,
 } from "lucide-react"
 import { useSeatMapStore } from "@/lib/store"
 
 export function AlignmentTools() {
-  const { canvas, selectedCount, selectedObjects, addToHistory } = useSeatMapStore()
+  const { canvas, selectedObjects, selectedCount, addToHistory } = useSeatMapStore()
 
   const alignObjects = (alignment: string) => {
     if (!canvas || selectedCount < 2) return
@@ -164,30 +161,36 @@ export function AlignmentTools() {
     addToHistory(JSON.stringify(canvas.toJSON()))
   }
 
+  const rotateObjects = (angle: number) => {
+    if (!canvas || selectedCount === 0) return
+
+    const activeObjects = canvas.getActiveObjects()
+
+    activeObjects.forEach((obj) => {
+      const currentAngle = obj.angle || 0
+      obj.set({ angle: currentAngle + angle })
+      obj.setCoords()
+    })
+
+    canvas.renderAll()
+    addToHistory(JSON.stringify(canvas.toJSON()))
+  }
+
   return (
-    <Card className="bg-gray-700 border-gray-600">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-sm text-gray-200">Alignment & Distribution</CardTitle>
-        <p className="text-xs text-gray-400">
-          {selectedCount === 0
-            ? "Select objects to align"
-            : selectedCount === 1
-              ? "Select 2+ objects to align"
-              : `${selectedCount} objects selected`}
-        </p>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Horizontal Alignment */}
-        <div className="space-y-2">
-          <h4 className="text-xs font-medium text-gray-300">Horizontal Alignment</h4>
-          <div className="grid grid-cols-3 gap-1">
+    <div className="space-y-4">
+      {/* Horizontal Alignment */}
+      <Card className="bg-gray-700 border-gray-600">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm text-gray-200">Horizontal Alignment</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-3 gap-2">
             <Button
               variant="outline"
               size="sm"
               onClick={() => alignObjects("left")}
               disabled={selectedCount < 2}
-              className="border-gray-500 text-gray-200 hover:bg-gray-600 bg-transparent p-2"
-              title="Align Left"
+              className="border-gray-500 text-gray-200 hover:bg-gray-600 bg-transparent"
             >
               <AlignLeft className="h-4 w-4" />
             </Button>
@@ -196,8 +199,7 @@ export function AlignmentTools() {
               size="sm"
               onClick={() => alignObjects("horizontal-center")}
               disabled={selectedCount < 2}
-              className="border-gray-500 text-gray-200 hover:bg-gray-600 bg-transparent p-2"
-              title="Align Center"
+              className="border-gray-500 text-gray-200 hover:bg-gray-600 bg-transparent"
             >
               <AlignCenter className="h-4 w-4" />
             </Button>
@@ -206,25 +208,27 @@ export function AlignmentTools() {
               size="sm"
               onClick={() => alignObjects("right")}
               disabled={selectedCount < 2}
-              className="border-gray-500 text-gray-200 hover:bg-gray-600 bg-transparent p-2"
-              title="Align Right"
+              className="border-gray-500 text-gray-200 hover:bg-gray-600 bg-transparent"
             >
               <AlignRight className="h-4 w-4" />
             </Button>
           </div>
-        </div>
+        </CardContent>
+      </Card>
 
-        {/* Vertical Alignment */}
-        <div className="space-y-2">
-          <h4 className="text-xs font-medium text-gray-300">Vertical Alignment</h4>
-          <div className="grid grid-cols-3 gap-1">
+      {/* Vertical Alignment */}
+      <Card className="bg-gray-700 border-gray-600">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm text-gray-200">Vertical Alignment</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-3 gap-2">
             <Button
               variant="outline"
               size="sm"
               onClick={() => alignObjects("top")}
               disabled={selectedCount < 2}
-              className="border-gray-500 text-gray-200 hover:bg-gray-600 bg-transparent p-2"
-              title="Align Top"
+              className="border-gray-500 text-gray-200 hover:bg-gray-600 bg-transparent"
             >
               <AlignVerticalJustifyStart className="h-4 w-4" />
             </Button>
@@ -233,8 +237,7 @@ export function AlignmentTools() {
               size="sm"
               onClick={() => alignObjects("vertical-center")}
               disabled={selectedCount < 2}
-              className="border-gray-500 text-gray-200 hover:bg-gray-600 bg-transparent p-2"
-              title="Align Middle"
+              className="border-gray-500 text-gray-200 hover:bg-gray-600 bg-transparent"
             >
               <AlignVerticalJustifyCenter className="h-4 w-4" />
             </Button>
@@ -243,19 +246,20 @@ export function AlignmentTools() {
               size="sm"
               onClick={() => alignObjects("bottom")}
               disabled={selectedCount < 2}
-              className="border-gray-500 text-gray-200 hover:bg-gray-600 bg-transparent p-2"
-              title="Align Bottom"
+              className="border-gray-500 text-gray-200 hover:bg-gray-600 bg-transparent"
             >
               <AlignVerticalJustifyEnd className="h-4 w-4" />
             </Button>
           </div>
-        </div>
+        </CardContent>
+      </Card>
 
-        <Separator className="bg-gray-600" />
-
-        {/* Distribution */}
-        <div className="space-y-2">
-          <h4 className="text-xs font-medium text-gray-300">Distribution</h4>
+      {/* Distribution */}
+      <Card className="bg-gray-700 border-gray-600">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm text-gray-200">Distribution</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
           <div className="grid grid-cols-2 gap-2">
             <Button
               variant="outline"
@@ -263,10 +267,9 @@ export function AlignmentTools() {
               onClick={() => distributeObjects("horizontal")}
               disabled={selectedCount < 3}
               className="border-gray-500 text-gray-200 hover:bg-gray-600 bg-transparent"
-              title="Distribute Horizontally"
             >
-              <DistributeHorizontal className="h-4 w-4 mr-1" />
-              <span className="text-xs">H-Dist</span>
+              <Distribute className="h-4 w-4 mr-1" />
+              Horizontal
             </Button>
             <Button
               variant="outline"
@@ -274,58 +277,61 @@ export function AlignmentTools() {
               onClick={() => distributeObjects("vertical")}
               disabled={selectedCount < 3}
               className="border-gray-500 text-gray-200 hover:bg-gray-600 bg-transparent"
-              title="Distribute Vertically"
             >
-              <DistributeVertical className="h-4 w-4 mr-1" />
-              <span className="text-xs">V-Dist</span>
+              <Distribute className="h-4 w-4 mr-1" />
+              Vertical
             </Button>
           </div>
-        </div>
+        </CardContent>
+      </Card>
 
-        <Separator className="bg-gray-600" />
-
-        {/* Canvas Centering */}
-        <div className="space-y-2">
-          <h4 className="text-xs font-medium text-gray-300">Center on Canvas</h4>
-          <div className="grid grid-cols-3 gap-1">
+      {/* Canvas Centering */}
+      <Card className="bg-gray-700 border-gray-600">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm text-gray-200">Center on Canvas</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-2 gap-2">
             <Button
               variant="outline"
               size="sm"
               onClick={() => centerOnCanvas("horizontal")}
               disabled={selectedCount === 0}
-              className="border-gray-500 text-gray-200 hover:bg-gray-600 bg-transparent p-2"
-              title="Center Horizontally"
+              className="border-gray-500 text-gray-200 hover:bg-gray-600 bg-transparent"
             >
-              <AlignCenter className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => centerOnCanvas("both")}
-              disabled={selectedCount === 0}
-              className="border-gray-500 text-gray-200 hover:bg-gray-600 bg-transparent p-2"
-              title="Center Both"
-            >
-              <Move className="h-4 w-4" />
+              <AlignCenter className="h-4 w-4 mr-1" />
+              Horizontal
             </Button>
             <Button
               variant="outline"
               size="sm"
               onClick={() => centerOnCanvas("vertical")}
               disabled={selectedCount === 0}
-              className="border-gray-500 text-gray-200 hover:bg-gray-600 bg-transparent p-2"
-              title="Center Vertically"
+              className="border-gray-500 text-gray-200 hover:bg-gray-600 bg-transparent"
             >
-              <AlignVerticalJustifyCenter className="h-4 w-4" />
+              <AlignVerticalJustifyCenter className="h-4 w-4 mr-1" />
+              Vertical
             </Button>
           </div>
-        </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => centerOnCanvas("both")}
+            disabled={selectedCount === 0}
+            className="w-full border-gray-500 text-gray-200 hover:bg-gray-600 bg-transparent"
+          >
+            <Move className="h-4 w-4 mr-2" />
+            Center Both
+          </Button>
+        </CardContent>
+      </Card>
 
-        <Separator className="bg-gray-600" />
-
-        {/* Layer Order */}
-        <div className="space-y-2">
-          <h4 className="text-xs font-medium text-gray-300">Layer Order</h4>
+      {/* Layer Order */}
+      <Card className="bg-gray-700 border-gray-600">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm text-gray-200">Layer Order</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
           <div className="grid grid-cols-2 gap-2">
             <Button
               variant="outline"
@@ -333,10 +339,9 @@ export function AlignmentTools() {
               onClick={() => changeLayerOrder("front")}
               disabled={selectedCount === 0}
               className="border-gray-500 text-gray-200 hover:bg-gray-600 bg-transparent"
-              title="Bring to Front"
             >
               <ArrowUp className="h-4 w-4 mr-1" />
-              <span className="text-xs">Front</span>
+              To Front
             </Button>
             <Button
               variant="outline"
@@ -344,21 +349,21 @@ export function AlignmentTools() {
               onClick={() => changeLayerOrder("back")}
               disabled={selectedCount === 0}
               className="border-gray-500 text-gray-200 hover:bg-gray-600 bg-transparent"
-              title="Send to Back"
             >
               <ArrowDown className="h-4 w-4 mr-1" />
-              <span className="text-xs">Back</span>
+              To Back
             </Button>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
             <Button
               variant="outline"
               size="sm"
               onClick={() => changeLayerOrder("forward")}
               disabled={selectedCount === 0}
               className="border-gray-500 text-gray-200 hover:bg-gray-600 bg-transparent"
-              title="Bring Forward"
             >
-              <ChevronUp className="h-4 w-4 mr-1" />
-              <span className="text-xs">Forward</span>
+              <ArrowUp className="h-4 w-4 mr-1" />
+              Forward
             </Button>
             <Button
               variant="outline"
@@ -366,14 +371,76 @@ export function AlignmentTools() {
               onClick={() => changeLayerOrder("backward")}
               disabled={selectedCount === 0}
               className="border-gray-500 text-gray-200 hover:bg-gray-600 bg-transparent"
-              title="Send Backward"
             >
-              <ChevronDown className="h-4 w-4 mr-1" />
-              <span className="text-xs">Backward</span>
+              <ArrowDown className="h-4 w-4 mr-1" />
+              Backward
             </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Rotation */}
+      <Card className="bg-gray-700 border-gray-600">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm text-gray-200">Rotation</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => rotateObjects(-90)}
+              disabled={selectedCount === 0}
+              className="border-gray-500 text-gray-200 hover:bg-gray-600 bg-transparent"
+            >
+              <RotateCw className="h-4 w-4 mr-1 transform scale-x-[-1]" />
+              -90°
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => rotateObjects(90)}
+              disabled={selectedCount === 0}
+              className="border-gray-500 text-gray-200 hover:bg-gray-600 bg-transparent"
+            >
+              <RotateCw className="h-4 w-4 mr-1" />
+              +90°
+            </Button>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => rotateObjects(-45)}
+              disabled={selectedCount === 0}
+              className="border-gray-500 text-gray-200 hover:bg-gray-600 bg-transparent"
+            >
+              -45°
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => rotateObjects(45)}
+              disabled={selectedCount === 0}
+              className="border-gray-500 text-gray-200 hover:bg-gray-600 bg-transparent"
+            >
+              +45°
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {selectedCount === 0 && (
+        <div className="text-center text-gray-500 py-4">
+          <p className="text-sm">Select objects to use alignment tools</p>
         </div>
-      </CardContent>
-    </Card>
+      )}
+
+      {selectedCount === 1 && (
+        <div className="text-center text-gray-500 py-4">
+          <p className="text-sm">Select 2+ objects for alignment and distribution</p>
+        </div>
+      )}
+    </div>
   )
 }

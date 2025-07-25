@@ -1,606 +1,437 @@
 "use client"
-
-import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
-import { Slider } from "@/components/ui/slider"
-import { LayersPanel } from "./layers-panel"
-import { AlignmentTools } from "./alignment-tools"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Badge } from "@/components/ui/badge"
 import { useSeatMapStore } from "@/lib/store"
-import { SEAT_COLORS, SEAT_PRICES, updateObjectColor } from "@/lib/fabric-utils"
+import { getObjectType } from "@/lib/fabric-utils"
+import { Settings, Palette, Move, RotateCw } from "lucide-react"
 
 export function RightSidebar() {
-  const {
-    selectedCount,
-    selectedObjects,
-    activeSelection,
-    inspectorType,
-    updateSelectedObject,
-    updateSelectedObjects,
-    canvas,
-  } = useSeatMapStore()
+  const { selectedObjects, seatCategories, updateSelectedObject, canvas, addToHistory } = useSeatMapStore()
 
-  return (
-    <aside className="w-80 bg-gray-800 border-l border-gray-700 flex flex-col">
-      <div className="p-4 border-b border-gray-700">
-        <h2 className="text-lg font-semibold text-white mb-1">Inspector</h2>
-        <p className="text-sm text-gray-400">
-          {inspectorType === "none" && "No selection"}
-          {inspectorType === "seat" && "Seat Properties"}
-          {inspectorType === "stage" && "Stage Properties"}
-          {inspectorType === "door" && "Door Properties"}
-          {inspectorType === "text" && "Text Properties"}
-          {inspectorType === "multiple" && `${selectedCount} objects selected`}
-        </p>
+  const updateObjectProperty = (property: string, value: any) => {
+    if (!canvas || selectedObjects.length === 0) return
+
+    selectedObjects.forEach((obj) => {
+      obj.set(property, value)
+      obj.setCoords()
+    })
+
+    canvas.renderAll()
+
+    // Add to history after a short delay
+    setTimeout(() => {
+      addToHistory(JSON.stringify(canvas.toJSON()))
+    }, 100)
+  }
+
+  if (selectedObjects.length === 0) {
+    return (
+      <div className="w-80 bg-card border-l border-border">
+        <div className="p-4">
+          <h3 className="text-lg font-semibold mb-4 flex items-center">
+            <Settings className="h-5 w-5 mr-2" />
+            Inspector
+          </h3>
+          <div className="text-center text-muted-foreground py-8">
+            <div className="mb-4">
+              <div className="w-16 h-16 bg-muted rounded-full mx-auto flex items-center justify-center">
+                <Move className="h-8 w-8" />
+              </div>
+            </div>
+            <p className="text-sm">Select an object to edit its properties</p>
+            <p className="text-xs text-muted-foreground mt-2">
+              Click on any object in the canvas to see its properties here
+            </p>
+          </div>
+        </div>
       </div>
-
-      <Tabs defaultValue="properties" className="flex-1 flex flex-col">
-        <TabsList className="grid w-full grid-cols-3 bg-gray-700 mx-4 mt-4">
-          <TabsTrigger value="properties" className="text-xs">
-            Properties
-          </TabsTrigger>
-          <TabsTrigger value="layers" className="text-xs">
-            Layers
-          </TabsTrigger>
-          <TabsTrigger value="align" className="text-xs">
-            Align
-          </TabsTrigger>
-        </TabsList>
-
-        <ScrollArea className="flex-1">
-          <div className="p-4">
-            <TabsContent value="properties" className="mt-0 space-y-4">
-              {inspectorType === "none" && <NoSelectionView />}
-              {inspectorType === "seat" && <SeatInspector />}
-              {inspectorType === "stage" && <StageInspector />}
-              {inspectorType === "door" && <DoorInspector />}
-              {inspectorType === "text" && <TextInspector />}
-              {inspectorType === "multiple" && <MultipleSelectionInspector />}
-            </TabsContent>
-
-            <TabsContent value="layers" className="mt-0">
-              <LayersPanel />
-            </TabsContent>
-
-            <TabsContent value="align" className="mt-0">
-              <AlignmentTools />
-            </TabsContent>
-          </div>
-        </ScrollArea>
-      </Tabs>
-    </aside>
-  )
-}
-
-function NoSelectionView() {
-  return (
-    <div className="text-center text-gray-500 py-8">
-      <p>Select an object to view and edit its properties</p>
-    </div>
-  )
-}
-
-function SeatInspector() {
-  const { activeSelection, updateSelectedObject } = useSeatMapStore()
-  const [seatData, setSeatData] = useState<any>({})
-
-  useEffect(() => {
-    if (activeSelection) {
-      const obj = activeSelection as any
-      setSeatData({
-        label: obj.label || "",
-        seatType: obj.seatType || "standard",
-        price: obj.price || 50,
-        isAvailable: obj.isAvailable !== false,
-        category: obj.category || "standard",
-        left: Math.round(obj.left || 0),
-        top: Math.round(obj.top || 0),
-        width: Math.round((obj.width || 24) * (obj.scaleX || 1)),
-        height: Math.round((obj.height || 24) * (obj.scaleY || 1)),
-        angle: Math.round(obj.angle || 0),
-      })
-    }
-  }, [activeSelection])
-
-  const handleUpdate = (property: string, value: any) => {
-    setSeatData((prev: any) => ({ ...prev, [property]: value }))
-
-    const updates: any = { [property]: value }
-
-    // Special handling for seat type changes
-    if (property === "seatType") {
-      updates.fill = SEAT_COLORS[value as keyof typeof SEAT_COLORS]
-      updates.price = SEAT_PRICES[value as keyof typeof SEAT_PRICES]
-      setSeatData((prev: any) => ({
-        ...prev,
-        seatType: value,
-        price: SEAT_PRICES[value as keyof typeof SEAT_PRICES],
-      }))
-    }
-
-    // Special handling for color changes
-    if (property === "fill" && activeSelection) {
-      updateObjectColor(activeSelection, value)
-      return
-    }
-
-    updateSelectedObject(updates)
+    )
   }
 
-  return (
-    <div className="space-y-4">
-      <Card className="bg-gray-700 border-gray-600">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm text-gray-200">Seat Details</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label className="text-xs text-gray-300">Seat Label</Label>
-            <Input
-              value={seatData.label || ""}
-              onChange={(e) => handleUpdate("label", e.target.value)}
-              className="h-8 bg-gray-600 border-gray-500 text-white"
-              placeholder="A1"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label className="text-xs text-gray-300">Seat Type</Label>
-            <Select value={seatData.seatType} onValueChange={(value) => handleUpdate("seatType", value)}>
-              <SelectTrigger className="h-8 bg-gray-600 border-gray-500 text-white">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-gray-700 border-gray-600">
-                <SelectItem value="standard">Standard</SelectItem>
-                <SelectItem value="vip">VIP</SelectItem>
-                <SelectItem value="wheelchair">Wheelchair</SelectItem>
-                <SelectItem value="premium">Premium</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label className="text-xs text-gray-300">Price ($)</Label>
-            <Input
-              type="number"
-              value={seatData.price || 0}
-              onChange={(e) => handleUpdate("price", Number(e.target.value))}
-              className="h-8 bg-gray-600 border-gray-500 text-white"
-            />
-          </div>
-
-          <div className="flex items-center justify-between">
-            <Label className="text-xs text-gray-300">Available</Label>
-            <Switch
-              checked={seatData.isAvailable}
-              onCheckedChange={(checked) => handleUpdate("isAvailable", checked)}
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="bg-gray-700 border-gray-600">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm text-gray-200">Position & Size</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-2">
-              <Label className="text-xs text-gray-300">X Position</Label>
-              <Input
-                type="number"
-                value={seatData.left || 0}
-                onChange={(e) => handleUpdate("left", Number(e.target.value))}
-                className="h-8 bg-gray-600 border-gray-500 text-white"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-xs text-gray-300">Y Position</Label>
-              <Input
-                type="number"
-                value={seatData.top || 0}
-                onChange={(e) => handleUpdate("top", Number(e.target.value))}
-                className="h-8 bg-gray-600 border-gray-500 text-white"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-2">
-              <Label className="text-xs text-gray-300">Width</Label>
-              <Input
-                type="number"
-                value={seatData.width || 24}
-                onChange={(e) => {
-                  const newWidth = Number(e.target.value)
-                  const scaleX = newWidth / 24 // 24 is the original width
-                  handleUpdate("scaleX", scaleX)
-                }}
-                className="h-8 bg-gray-600 border-gray-500 text-white"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-xs text-gray-300">Height</Label>
-              <Input
-                type="number"
-                value={seatData.height || 24}
-                onChange={(e) => {
-                  const newHeight = Number(e.target.value)
-                  const scaleY = newHeight / 24 // 24 is the original height
-                  handleUpdate("scaleY", scaleY)
-                }}
-                className="h-8 bg-gray-600 border-gray-500 text-white"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label className="text-xs text-gray-300">Rotation (°)</Label>
-            <div className="flex items-center space-x-2">
-              <Slider
-                value={[seatData.angle || 0]}
-                onValueChange={([value]) => handleUpdate("angle", value)}
-                max={360}
-                min={0}
-                step={1}
-                className="flex-1"
-              />
-              <span className="text-xs text-gray-400 w-8">{seatData.angle || 0}°</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  )
-}
-
-function StageInspector() {
-  const { activeSelection, updateSelectedObject } = useSeatMapStore()
-  const [stageData, setStageData] = useState<any>({})
-
-  useEffect(() => {
-    if (activeSelection) {
-      const obj = activeSelection as any
-      setStageData({
-        label: obj.label || "STAGE",
-        stageType: obj.stageType || "main",
-        left: Math.round(obj.left || 0),
-        top: Math.round(obj.top || 0),
-        width: Math.round((obj.width || 300) * (obj.scaleX || 1)),
-        height: Math.round((obj.height || 80) * (obj.scaleY || 1)),
-        angle: Math.round(obj.angle || 0),
-      })
-    }
-  }, [activeSelection])
-
-  const handleUpdate = (property: string, value: any) => {
-    setStageData((prev: any) => ({ ...prev, [property]: value }))
-    updateSelectedObject({ [property]: value })
-  }
+  const selectedObject = selectedObjects[0]
+  const objectType = getObjectType(selectedObject)
+  const isMultipleSelection = selectedObjects.length > 1
 
   return (
-    <div className="space-y-4">
-      <Card className="bg-gray-700 border-gray-600">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm text-gray-200">Stage Details</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label className="text-xs text-gray-300">Stage Label</Label>
-            <Input
-              value={stageData.label || ""}
-              onChange={(e) => handleUpdate("label", e.target.value)}
-              className="h-8 bg-gray-600 border-gray-500 text-white"
-              placeholder="STAGE"
-            />
-          </div>
+    <div className="w-80 bg-card border-l border-border">
+      <div className="p-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold flex items-center">
+            <Settings className="h-5 w-5 mr-2" />
+            Inspector
+          </h3>
+          {isMultipleSelection && <Badge variant="secondary">{selectedObjects.length} selected</Badge>}
+        </div>
 
-          <div className="space-y-2">
-            <Label className="text-xs text-gray-300">Stage Type</Label>
-            <Select value={stageData.stageType} onValueChange={(value) => handleUpdate("stageType", value)}>
-              <SelectTrigger className="h-8 bg-gray-600 border-gray-500 text-white">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-gray-700 border-gray-600">
-                <SelectItem value="main">Main Stage</SelectItem>
-                <SelectItem value="secondary">Secondary Stage</SelectItem>
-                <SelectItem value="platform">Platform</SelectItem>
-                <SelectItem value="orchestra">Orchestra Pit</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
+        <Tabs defaultValue="properties" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="properties">Properties</TabsTrigger>
+            <TabsTrigger value="style">Style</TabsTrigger>
+          </TabsList>
 
-      <Card className="bg-gray-700 border-gray-600">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm text-gray-200">Position & Size</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-2">
-              <Label className="text-xs text-gray-300">X Position</Label>
-              <Input
-                type="number"
-                value={stageData.left || 0}
-                onChange={(e) => handleUpdate("left", Number(e.target.value))}
-                className="h-8 bg-gray-600 border-gray-500 text-white"
+          <TabsContent value="properties" className="space-y-4">
+            {/* Object Type Info */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center">
+                  <div className="w-3 h-3 bg-blue-500 rounded-full mr-2" />
+                  {objectType.charAt(0).toUpperCase() + objectType.slice(1)}
+                  {isMultipleSelection && ` (${selectedObjects.length})`}
+                </CardTitle>
+              </CardHeader>
+            </Card>
+
+            {/* Position Controls */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center">
+                  <Move className="h-4 w-4 mr-2" />
+                  Position
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-xs">X</Label>
+                    <Input
+                      type="number"
+                      value={Math.round(selectedObject.left || 0)}
+                      onChange={(e) => updateObjectProperty("left", Number(e.target.value))}
+                      className="h-8"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Y</Label>
+                    <Input
+                      type="number"
+                      value={Math.round(selectedObject.top || 0)}
+                      onChange={(e) => updateObjectProperty("top", Number(e.target.value))}
+                      className="h-8"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-xs">Width</Label>
+                    <Input
+                      type="number"
+                      value={Math.round(selectedObject.width || 0)}
+                      onChange={(e) => updateObjectProperty("width", Number(e.target.value))}
+                      className="h-8"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Height</Label>
+                    <Input
+                      type="number"
+                      value={Math.round(selectedObject.height || 0)}
+                      onChange={(e) => updateObjectProperty("height", Number(e.target.value))}
+                      className="h-8"
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Rotation */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center">
+                  <RotateCw className="h-4 w-4 mr-2" />
+                  Transform
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div>
+                  <Label className="text-xs">Rotation (degrees)</Label>
+                  <Input
+                    type="number"
+                    value={Math.round(selectedObject.angle || 0)}
+                    onChange={(e) => updateObjectProperty("angle", Number(e.target.value))}
+                    className="h-8"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-xs">Scale X</Label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      value={selectedObject.scaleX || 1}
+                      onChange={(e) => updateObjectProperty("scaleX", Number(e.target.value))}
+                      className="h-8"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Scale Y</Label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      value={selectedObject.scaleY || 1}
+                      onChange={(e) => updateObjectProperty("scaleY", Number(e.target.value))}
+                      className="h-8"
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Object-specific properties */}
+            {objectType === "seat" && (
+              <SeatProperties seatData={(selectedObject as any).seatData} onUpdate={updateObjectProperty} />
+            )}
+
+            {objectType === "stage" && (
+              <StageProperties stageData={(selectedObject as any).stageData} onUpdate={updateObjectProperty} />
+            )}
+
+            {objectType === "text" && (
+              <TextProperties
+                textData={(selectedObject as any).textData}
+                object={selectedObject}
+                onUpdate={updateObjectProperty}
               />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-xs text-gray-300">Y Position</Label>
-              <Input
-                type="number"
-                value={stageData.top || 0}
-                onChange={(e) => handleUpdate("top", Number(e.target.value))}
-                className="h-8 bg-gray-600 border-gray-500 text-white"
-              />
-            </div>
-          </div>
+            )}
+          </TabsContent>
 
-          <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-2">
-              <Label className="text-xs text-gray-300">Width</Label>
-              <Input
-                type="number"
-                value={stageData.width || 300}
-                onChange={(e) => {
-                  const newWidth = Number(e.target.value)
-                  const scaleX = newWidth / 300
-                  handleUpdate("scaleX", scaleX)
-                }}
-                className="h-8 bg-gray-600 border-gray-500 text-white"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-xs text-gray-300">Height</Label>
-              <Input
-                type="number"
-                value={stageData.height || 80}
-                onChange={(e) => {
-                  const newHeight = Number(e.target.value)
-                  const scaleY = newHeight / 80
-                  handleUpdate("scaleY", scaleY)
-                }}
-                className="h-8 bg-gray-600 border-gray-500 text-white"
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  )
-}
+          <TabsContent value="style" className="space-y-4">
+            {/* Appearance */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center">
+                  <Palette className="h-4 w-4 mr-2" />
+                  Appearance
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div>
+                  <Label className="text-xs">Fill Color</Label>
+                  <div className="flex items-center space-x-2 mt-1">
+                    <input
+                      type="color"
+                      value={(selectedObject.fill as string) || "#000000"}
+                      onChange={(e) => updateObjectProperty("fill", e.target.value)}
+                      className="w-8 h-8 rounded border cursor-pointer"
+                    />
+                    <Input
+                      value={(selectedObject.fill as string) || "#000000"}
+                      onChange={(e) => updateObjectProperty("fill", e.target.value)}
+                      placeholder="#000000"
+                      className="h-8"
+                    />
+                  </div>
+                </div>
 
-function DoorInspector() {
-  const { activeSelection, updateSelectedObject } = useSeatMapStore()
-  const [doorData, setDoorData] = useState<any>({})
+                <div>
+                  <Label className="text-xs">Stroke Color</Label>
+                  <div className="flex items-center space-x-2 mt-1">
+                    <input
+                      type="color"
+                      value={(selectedObject.stroke as string) || "#000000"}
+                      onChange={(e) => updateObjectProperty("stroke", e.target.value)}
+                      className="w-8 h-8 rounded border cursor-pointer"
+                    />
+                    <Input
+                      value={(selectedObject.stroke as string) || "#000000"}
+                      onChange={(e) => updateObjectProperty("stroke", e.target.value)}
+                      placeholder="#000000"
+                      className="h-8"
+                    />
+                  </div>
+                </div>
 
-  useEffect(() => {
-    if (activeSelection) {
-      const obj = activeSelection as any
-      setDoorData({
-        label: obj.label || "EXIT",
-        doorType: obj.doorType || "exit",
-        isEmergency: obj.isEmergency || false,
-        left: Math.round(obj.left || 0),
-        top: Math.round(obj.top || 0),
-        width: Math.round((obj.width || 60) * (obj.scaleX || 1)),
-        height: Math.round((obj.height || 20) * (obj.scaleY || 1)),
-      })
-    }
-  }, [activeSelection])
+                <div>
+                  <Label className="text-xs">Stroke Width</Label>
+                  <Input
+                    type="number"
+                    value={selectedObject.strokeWidth || 0}
+                    onChange={(e) => updateObjectProperty("strokeWidth", Number(e.target.value))}
+                    className="h-8"
+                  />
+                </div>
 
-  const handleUpdate = (property: string, value: any) => {
-    setDoorData((prev: any) => ({ ...prev, [property]: value }))
-    updateSelectedObject({ [property]: value })
-  }
+                <div>
+                  <Label className="text-xs">Opacity</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    value={selectedObject.opacity || 1}
+                    onChange={(e) => updateObjectProperty("opacity", Number(e.target.value))}
+                    className="h-8"
+                  />
+                </div>
+              </CardContent>
+            </Card>
 
-  return (
-    <div className="space-y-4">
-      <Card className="bg-gray-700 border-gray-600">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm text-gray-200">Door Details</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label className="text-xs text-gray-300">Door Label</Label>
-            <Input
-              value={doorData.label || ""}
-              onChange={(e) => handleUpdate("label", e.target.value)}
-              className="h-8 bg-gray-600 border-gray-500 text-white"
-              placeholder="EXIT"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label className="text-xs text-gray-300">Door Type</Label>
-            <Select value={doorData.doorType} onValueChange={(value) => handleUpdate("doorType", value)}>
-              <SelectTrigger className="h-8 bg-gray-600 border-gray-500 text-white">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-gray-700 border-gray-600">
-                <SelectItem value="exit">Exit</SelectItem>
-                <SelectItem value="entrance">Entrance</SelectItem>
-                <SelectItem value="emergency">Emergency Exit</SelectItem>
-                <SelectItem value="staff">Staff Only</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="flex items-center justify-between">
-            <Label className="text-xs text-gray-300">Emergency Exit</Label>
-            <Switch
-              checked={doorData.isEmergency}
-              onCheckedChange={(checked) => handleUpdate("isEmergency", checked)}
-            />
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  )
-}
-
-function TextInspector() {
-  const { activeSelection, updateSelectedObject } = useSeatMapStore()
-  const [textData, setTextData] = useState<any>({})
-
-  useEffect(() => {
-    if (activeSelection) {
-      const obj = activeSelection as any
-      setTextData({
-        text: obj.text || "",
-        fontSize: obj.fontSize || 16,
-        fontFamily: obj.fontFamily || "Arial",
-        fill: obj.fill || "#ffffff",
-        left: Math.round(obj.left || 0),
-        top: Math.round(obj.top || 0),
-        angle: Math.round(obj.angle || 0),
-      })
-    }
-  }, [activeSelection])
-
-  const handleUpdate = (property: string, value: any) => {
-    setTextData((prev: any) => ({ ...prev, [property]: value }))
-    updateSelectedObject({ [property]: value })
-  }
-
-  return (
-    <div className="space-y-4">
-      <Card className="bg-gray-700 border-gray-600">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm text-gray-200">Text Properties</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label className="text-xs text-gray-300">Text Content</Label>
-            <Input
-              value={textData.text || ""}
-              onChange={(e) => handleUpdate("text", e.target.value)}
-              className="h-8 bg-gray-600 border-gray-500 text-white"
-              placeholder="Enter text..."
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label className="text-xs text-gray-300">Font Size</Label>
-            <Input
-              type="number"
-              value={textData.fontSize || 16}
-              onChange={(e) => handleUpdate("fontSize", Number(e.target.value))}
-              className="h-8 bg-gray-600 border-gray-500 text-white"
-              min="8"
-              max="72"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label className="text-xs text-gray-300">Font Family</Label>
-            <Select value={textData.fontFamily} onValueChange={(value) => handleUpdate("fontFamily", value)}>
-              <SelectTrigger className="h-8 bg-gray-600 border-gray-500 text-white">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-gray-700 border-gray-600">
-                <SelectItem value="Arial">Arial</SelectItem>
-                <SelectItem value="Helvetica">Helvetica</SelectItem>
-                <SelectItem value="Times New Roman">Times New Roman</SelectItem>
-                <SelectItem value="Georgia">Georgia</SelectItem>
-                <SelectItem value="Verdana">Verdana</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label className="text-xs text-gray-300">Text Color</Label>
-            <Input
-              type="color"
-              value={textData.fill || "#ffffff"}
-              onChange={(e) => handleUpdate("fill", e.target.value)}
-              className="h-8 bg-gray-600 border-gray-500"
-            />
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  )
-}
-
-function MultipleSelectionInspector() {
-  const { selectedObjects, updateSelectedObjects } = useSeatMapStore()
-
-  const handleBulkUpdate = (property: string, value: any) => {
-    updateSelectedObjects({ [property]: value })
-  }
-
-  const objectTypes = [...new Set(selectedObjects.map((obj: any) => obj.objectType || obj.type || "object"))]
-
-  return (
-    <div className="space-y-4">
-      <Card className="bg-gray-700 border-gray-600">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm text-gray-200">Multiple Selection</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-gray-400">Selected:</span>
-              <span className="text-white">{selectedObjects.length} objects</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-400">Types:</span>
-              <span className="text-white capitalize">{objectTypes.join(", ")}</span>
-            </div>
-          </div>
-
-          <Separator className="bg-gray-600" />
-
-          <div className="space-y-3">
-            <h4 className="text-sm font-medium text-gray-300">Bulk Actions</h4>
-
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full border-gray-500 text-gray-200 hover:bg-gray-600 bg-transparent"
-              onClick={() => handleBulkUpdate("opacity", 0.5)}
-            >
-              Make Semi-Transparent
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full border-gray-500 text-gray-200 hover:bg-gray-600 bg-transparent"
-              onClick={() => handleBulkUpdate("opacity", 1)}
-            >
-              Make Fully Opaque
-            </Button>
-
-            <div className="space-y-2">
-              <Label className="text-xs text-gray-300">Bulk Color Change</Label>
-              <Input
-                type="color"
-                onChange={(e) => {
-                  selectedObjects.forEach((obj) => {
-                    updateObjectColor(obj, e.target.value)
-                  })
-                }}
-                className="h-8 bg-gray-600 border-gray-500"
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="text-center text-gray-500 py-4">
-        <p className="text-sm">Use alignment tools to arrange multiple objects</p>
+            {/* Seat Category Selection */}
+            {objectType === "seat" && (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm">Seat Category</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Select
+                    value={seatCategories.find((cat) => cat.color === selectedObject.fill)?.id || ""}
+                    onValueChange={(categoryId) => {
+                      const category = seatCategories.find((cat) => cat.id === categoryId)
+                      if (category) {
+                        updateObjectProperty("fill", category.color)
+                        // Update seat data
+                        if ((selectedObject as any).seatData) {
+                          ;(selectedObject as any).seatData.categoryId = category.id
+                          ;(selectedObject as any).seatData.categoryName = category.name
+                          ;(selectedObject as any).seatData.price = category.price
+                        }
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="h-8">
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {seatCategories.map((category) => (
+                        <SelectItem key={category.id} value={category.id}>
+                          <div className="flex items-center space-x-2">
+                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: category.color }} />
+                            <span>{category.name}</span>
+                            <span className="text-muted-foreground">${category.price}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
+  )
+}
+
+function SeatProperties({ seatData, onUpdate }: { seatData: any; onUpdate: (prop: string, value: any) => void }) {
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm">Seat Details</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div>
+          <Label className="text-xs">Seat Number</Label>
+          <Input
+            value={seatData?.seatNumber || ""}
+            onChange={(e) => {
+              if (seatData) seatData.seatNumber = e.target.value
+            }}
+            placeholder="A1"
+            className="h-8"
+          />
+        </div>
+        <div>
+          <Label className="text-xs">Price ($)</Label>
+          <Input
+            type="number"
+            value={seatData?.price || 0}
+            onChange={(e) => {
+              if (seatData) seatData.price = Number(e.target.value)
+            }}
+            className="h-8"
+          />
+        </div>
+        <div className="flex items-center space-x-2">
+          <Switch
+            checked={seatData?.isAvailable !== false}
+            onCheckedChange={(checked) => {
+              if (seatData) seatData.isAvailable = checked
+            }}
+          />
+          <Label className="text-xs">Available</Label>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function StageProperties({ stageData, onUpdate }: { stageData: any; onUpdate: (prop: string, value: any) => void }) {
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm">Stage Details</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div>
+          <Label className="text-xs">Stage Name</Label>
+          <Input
+            value={stageData?.name || ""}
+            onChange={(e) => {
+              if (stageData) stageData.name = e.target.value
+            }}
+            placeholder="Main Stage"
+            className="h-8"
+          />
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function TextProperties({
+  textData,
+  object,
+  onUpdate,
+}: {
+  textData: any
+  object: any
+  onUpdate: (prop: string, value: any) => void
+}) {
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm">Text Properties</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div>
+          <Label className="text-xs">Text Content</Label>
+          <Input
+            value={object.text || ""}
+            onChange={(e) => onUpdate("text", e.target.value)}
+            placeholder="Enter text..."
+            className="h-8"
+          />
+        </div>
+        <div>
+          <Label className="text-xs">Font Size</Label>
+          <Input
+            type="number"
+            value={object.fontSize || 16}
+            onChange={(e) => onUpdate("fontSize", Number(e.target.value))}
+            className="h-8"
+          />
+        </div>
+        <div>
+          <Label className="text-xs">Font Family</Label>
+          <Select value={object.fontFamily || "Arial"} onValueChange={(value) => onUpdate("fontFamily", value)}>
+            <SelectTrigger className="h-8">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Arial">Arial</SelectItem>
+              <SelectItem value="Helvetica">Helvetica</SelectItem>
+              <SelectItem value="Times New Roman">Times New Roman</SelectItem>
+              <SelectItem value="Georgia">Georgia</SelectItem>
+              <SelectItem value="Verdana">Verdana</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </CardContent>
+    </Card>
   )
 }

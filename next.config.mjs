@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  experimental: {
+    optimizePackageImports: ["fabric"],
+  },
   eslint: {
     ignoreDuringBuilds: true,
   },

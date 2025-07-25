@@ -2,120 +2,234 @@
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { Save, Download, Upload, Undo2, Redo2, Settings, Share, FileText } from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  Save,
+  Download,
+  Upload,
+  Undo,
+  Redo,
+  Settings,
+  HelpCircle,
+  Menu,
+  FileText,
+  ImageIcon,
+  Share,
+} from "lucide-react"
 import { useSeatMapStore } from "@/lib/store"
 
 export function Header() {
-  const { mapName, setMapName, canUndo, canRedo, undo, redo, canvas } = useSeatMapStore()
+  const { mapName, setMapName, canvas, canUndo, canRedo, undo, redo, selectedCount, activeTool } = useSeatMapStore()
 
-  const handleExport = () => {
+  const handleSave = () => {
     if (!canvas) return
+    const json = JSON.stringify(canvas.toJSON())
+    localStorage.setItem("seatmap-data", json)
+    console.log("Seat map saved to localStorage")
+  }
 
+  const handleLoad = () => {
+    if (!canvas) return
+    const saved = localStorage.getItem("seatmap-data")
+    if (saved) {
+      canvas.loadFromJSON(saved, () => {
+        canvas.renderAll()
+        console.log("Seat map loaded from localStorage")
+      })
+    }
+  }
+
+  const handleExportJSON = () => {
+    if (!canvas) return
+    const json = JSON.stringify(canvas.toJSON(), null, 2)
+    const blob = new Blob([json], { type: "application/json" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `${mapName.replace(/\s+/g, "-").toLowerCase()}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleExportImage = () => {
+    if (!canvas) return
     const dataURL = canvas.toDataURL({
       format: "png",
       quality: 1,
       multiplier: 2,
     })
-
-    const link = document.createElement("a")
-    link.download = `${mapName.replace(/\s+/g, "_")}.png`
-    link.href = dataURL
-    link.click()
+    const a = document.createElement("a")
+    a.href = dataURL
+    a.download = `${mapName.replace(/\s+/g, "-").toLowerCase()}.png`
+    a.click()
   }
 
-  const handleSave = () => {
-    if (!canvas) return
-
-    const json = JSON.stringify(canvas.toJSON())
-    const blob = new Blob([json], { type: "application/json" })
-    const url = URL.createObjectURL(blob)
-
-    const link = document.createElement("a")
-    link.download = `${mapName.replace(/\s+/g, "_")}.json`
-    link.href = url
-    link.click()
-
-    URL.revokeObjectURL(url)
+  const getToolDisplayName = (tool: string) => {
+    switch (tool) {
+      case "select":
+        return "Select"
+      case "draw-seats":
+        return "Draw Seats"
+      case "draw-polygon":
+        return "Draw Area"
+      case "add-objects":
+        return "Add Objects"
+      default:
+        return tool
+    }
   }
 
   return (
-    <header className="h-14 bg-gray-800 border-b border-gray-700 flex items-center px-4 gap-4">
-      {/* Logo/Title */}
-      <div className="flex items-center gap-3">
-        <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center">
-          <FileText className="h-4 w-4 text-white" />
+    <header className="bg-gray-800 border-b border-gray-700 px-4 py-2">
+      <div className="flex items-center justify-between">
+        {/* Left Section */}
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2">
+            <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center">
+              <span className="text-white font-bold text-sm">SM</span>
+            </div>
+            <span className="text-white font-semibold">Seat Map Editor</span>
+          </div>
+
+          <Separator orientation="vertical" className="h-6 bg-gray-600" />
+
+          <div className="flex items-center space-x-2">
+            <Input
+              value={mapName}
+              onChange={(e) => setMapName(e.target.value)}
+              className="w-64 h-8 bg-gray-700 border-gray-600 text-white"
+              placeholder="Map name..."
+            />
+          </div>
         </div>
-        <h1 className="text-lg font-semibold text-white">Seat Map Editor</h1>
-      </div>
 
-      <Separator orientation="vertical" className="h-6 bg-gray-600" />
+        {/* Center Section */}
+        <div className="flex items-center space-x-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={undo}
+            disabled={!canUndo}
+            className="text-gray-300 hover:text-white hover:bg-gray-700"
+          >
+            <Undo className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={redo}
+            disabled={!canRedo}
+            className="text-gray-300 hover:text-white hover:bg-gray-700"
+          >
+            <Redo className="h-4 w-4" />
+          </Button>
 
-      {/* Map Name */}
-      <div className="flex items-center gap-2">
-        <span className="text-sm text-gray-400">Map:</span>
-        <Input
-          value={mapName}
-          onChange={(e) => setMapName(e.target.value)}
-          className="h-8 w-64 bg-gray-700 border-gray-600 text-white text-sm"
-          placeholder="Enter map name..."
-        />
-      </div>
+          <Separator orientation="vertical" className="h-6 bg-gray-600" />
 
-      <Separator orientation="vertical" className="h-6 bg-gray-600" />
+          <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-2">
+              <span className="text-sm text-gray-400">Tool:</span>
+              <Badge variant="secondary" className="bg-blue-600 text-white">
+                {getToolDisplayName(activeTool)}
+              </Badge>
+            </div>
 
-      {/* Undo/Redo */}
-      <div className="flex items-center gap-1">
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={!canUndo}
-          onClick={undo}
-          className="h-8 w-8 p-0 text-gray-300 hover:bg-gray-700 disabled:opacity-30"
-        >
-          <Undo2 className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={!canRedo}
-          onClick={redo}
-          className="h-8 w-8 p-0 text-gray-300 hover:bg-gray-700 disabled:opacity-30"
-        >
-          <Redo2 className="h-4 w-4" />
-        </Button>
-      </div>
+            {selectedCount > 0 && (
+              <div className="flex items-center space-x-2">
+                <span className="text-sm text-gray-400">Selected:</span>
+                <Badge variant="outline" className="border-gray-500 text-gray-300">
+                  {selectedCount}
+                </Badge>
+              </div>
+            )}
+          </div>
+        </div>
 
-      <Separator orientation="vertical" className="h-6 bg-gray-600" />
+        {/* Right Section */}
+        <div className="flex items-center space-x-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleSave}
+            className="text-gray-300 hover:text-white hover:bg-gray-700"
+          >
+            <Save className="h-4 w-4 mr-1" />
+            Save
+          </Button>
 
-      {/* File Operations */}
-      <div className="flex items-center gap-1">
-        <Button variant="ghost" size="sm" onClick={handleSave} className="h-8 px-3 text-gray-300 hover:bg-gray-700">
-          <Save className="h-4 w-4 mr-1" />
-          Save
-        </Button>
-        <Button variant="ghost" size="sm" onClick={handleExport} className="h-8 px-3 text-gray-300 hover:bg-gray-700">
-          <Download className="h-4 w-4 mr-1" />
-          Export
-        </Button>
-        <Button variant="ghost" size="sm" className="h-8 px-3 text-gray-300 hover:bg-gray-700">
-          <Upload className="h-4 w-4 mr-1" />
-          Import
-        </Button>
-      </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleLoad}
+            className="text-gray-300 hover:text-white hover:bg-gray-700"
+          >
+            <Upload className="h-4 w-4 mr-1" />
+            Load
+          </Button>
 
-      {/* Spacer */}
-      <div className="flex-1" />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="text-gray-300 hover:text-white hover:bg-gray-700">
+                <Download className="h-4 w-4 mr-1" />
+                Export
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="bg-gray-800 border-gray-700">
+              <DropdownMenuItem onClick={handleExportJSON} className="text-gray-300 hover:bg-gray-700 hover:text-white">
+                <FileText className="h-4 w-4 mr-2" />
+                Export as JSON
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={handleExportImage}
+                className="text-gray-300 hover:bg-gray-700 hover:text-white"
+              >
+                <ImageIcon className="h-4 w-4 mr-2" />
+                Export as PNG
+              </DropdownMenuItem>
+              <DropdownMenuSeparator className="bg-gray-600" />
+              <DropdownMenuItem className="text-gray-300 hover:bg-gray-700 hover:text-white">
+                <Share className="h-4 w-4 mr-2" />
+                Share Link
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
-      {/* Right Actions */}
-      <div className="flex items-center gap-1">
-        <Button variant="ghost" size="sm" className="h-8 px-3 text-gray-300 hover:bg-gray-700">
-          <Share className="h-4 w-4 mr-1" />
-          Share
-        </Button>
-        <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-gray-300 hover:bg-gray-700">
-          <Settings className="h-4 w-4" />
-        </Button>
+          <Separator orientation="vertical" className="h-6 bg-gray-600" />
+
+          <Button variant="ghost" size="sm" className="text-gray-300 hover:text-white hover:bg-gray-700">
+            <Settings className="h-4 w-4" />
+          </Button>
+
+          <Button variant="ghost" size="sm" className="text-gray-300 hover:text-white hover:bg-gray-700">
+            <HelpCircle className="h-4 w-4" />
+          </Button>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="text-gray-300 hover:text-white hover:bg-gray-700">
+                <Menu className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="bg-gray-800 border-gray-700">
+              <DropdownMenuItem className="text-gray-300 hover:bg-gray-700 hover:text-white">
+                Preferences
+              </DropdownMenuItem>
+              <DropdownMenuItem className="text-gray-300 hover:bg-gray-700 hover:text-white">
+                Keyboard Shortcuts
+              </DropdownMenuItem>
+              <DropdownMenuSeparator className="bg-gray-600" />
+              <DropdownMenuItem className="text-gray-300 hover:bg-gray-700 hover:text-white">About</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
     </header>
   )

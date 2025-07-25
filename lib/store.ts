@@ -1,153 +1,178 @@
+"use client"
+
 import { create } from "zustand"
-import type { fabric } from "fabric"
+import { fabric } from "fabric"
 
-export type Tool = "select" | "draw-seats" | "draw-polygon" | "add-objects"
-export type SeatType = "standard" | "vip" | "wheelchair" | "premium"
-export type ObjectType = "seat" | "stage" | "door" | "text" | "wall" | "area" | "row"
+export interface SeatCategory {
+  id: string
+  name: string
+  color: string
+  price: number
+  description?: string
+}
 
-export interface SeatMapState {
-  // Canvas state
+export interface SeatData {
+  seatNumber: string
+  categoryId: string
+  categoryName: string
+  price: number
+  isAvailable: boolean
+  rowId?: string
+}
+
+export interface StageData {
+  name: string
+  width: number
+  height: number
+}
+
+export interface TextData {
+  content: string
+  fontSize: number
+  fontFamily: string
+}
+
+export interface RowData {
+  id: string
+  label: string
+  seatCount: number
+  numberingScheme: "numeric" | "alphabetic" | "alphanumeric"
+  categoryId: string
+}
+
+export type ToolType = "select" | "seat" | "stage" | "text" | "curved-row" | "polygon" | "wall"
+
+interface SeatMapState {
+  // Canvas
   canvas: fabric.Canvas | null
   setCanvas: (canvas: fabric.Canvas | null) => void
 
-  // Tool state
-  activeTool: Tool
-  setActiveTool: (tool: Tool) => void
+  // Tools
+  activeTool: ToolType
+  setActiveTool: (tool: ToolType) => void
 
-  // Selection state
+  // Selection
   selectedObjects: fabric.Object[]
   setSelectedObjects: (objects: fabric.Object[]) => void
-  selectedCount: number
-  setSelectedCount: (count: number) => void
-  activeSelection: fabric.ActiveSelection | fabric.Object | null
-  setActiveSelection: (selection: fabric.ActiveSelection | fabric.Object | null) => void
 
-  // Inspector state
-  inspectorType: "none" | "seat" | "stage" | "door" | "text" | "row" | "multiple"
-  setInspectorType: (type: "none" | "seat" | "stage" | "door" | "text" | "row" | "multiple") => void
+  // Categories
+  seatCategories: SeatCategory[]
+  addSeatCategory: (category: SeatCategory) => void
+  updateSeatCategory: (id: string, updates: Partial<SeatCategory>) => void
+  deleteSeatCategory: (id: string) => void
 
-  // Drawing state
-  isDrawing: boolean
-  setIsDrawing: (drawing: boolean) => void
-  currentSeatType: SeatType
-  setCurrentSeatType: (type: SeatType) => void
+  // UI State
+  showGrid: boolean
+  setShowGrid: (show: boolean) => void
+  showLayersPanel: boolean
+  setShowLayersPanel: (show: boolean) => void
+  showCategoriesModal: boolean
+  setShowCategoriesModal: (show: boolean) => void
 
-  // Grid and snapping
+  // History
+  history: string[]
+  historyIndex: number
+  canUndo: boolean
+  canRedo: boolean
+  addToHistory: (state: string) => void
+  undo: () => void
+  redo: () => void
+
+  // Zoom and Pan
+  zoomLevel: number
+  setZoomLevel: (zoom: number) => void
+  panX: number
+  panY: number
+  setPan: (x: number, y: number) => void
+
+  // Snap settings
   snapToGrid: boolean
   setSnapToGrid: (snap: boolean) => void
   gridSize: number
   setGridSize: (size: number) => void
 
-  // Canvas properties
-  zoom: number
-  setZoom: (zoom: number) => void
+  // Object operations
+  duplicateSelectedObjects: () => void
+  deleteSelectedObjects: () => void
+  groupSelectedObjects: () => void
+  ungroupSelectedObjects: () => void
+  alignObjects: (alignment: "left" | "center" | "right" | "top" | "middle" | "bottom") => void
+  updateSelectedObject: (properties: any) => void
 
-  // Map properties
-  mapName: string
-  setMapName: (name: string) => void
+  // Layers
+  layers: fabric.Object[]
+  setLayers: (layers: fabric.Object[]) => void
+  toggleLayerVisibility: (object: fabric.Object) => void
+  toggleLayerLock: (object: fabric.Object) => void
 
-  // History (for undo/redo)
-  history: string[]
-  historyIndex: number
-  addToHistory: (state: string) => void
-  undo: () => void
-  redo: () => void
-  canUndo: boolean
-  canRedo: boolean
-
-  // Object update methods
-  updateSelectedObject: (properties: Partial<any>) => void
-  updateSelectedObjects: (properties: Partial<any>) => void
+  // Drawing state
+  isDrawing: boolean
+  setIsDrawing: (drawing: boolean) => void
+  currentPath: fabric.Path | null
+  setCurrentPath: (path: fabric.Path | null) => void
 }
 
 export const useSeatMapStore = create<SeatMapState>((set, get) => ({
-  // Canvas state
+  // Canvas
   canvas: null,
   setCanvas: (canvas) => set({ canvas }),
 
-  // Tool state
+  // Tools
   activeTool: "select",
-  setActiveTool: (tool) => {
-    const { canvas } = get()
-    if (canvas) {
-      // Update canvas behavior based on tool
-      switch (tool) {
-        case "select":
-          canvas.selection = true
-          canvas.defaultCursor = "default"
-          canvas.hoverCursor = "move"
-          canvas.isDrawingMode = false
-          break
-        case "draw-seats":
-          canvas.selection = false
-          canvas.defaultCursor = "crosshair"
-          canvas.hoverCursor = "crosshair"
-          canvas.isDrawingMode = false
-          break
-        case "draw-polygon":
-          canvas.selection = false
-          canvas.defaultCursor = "crosshair"
-          canvas.hoverCursor = "crosshair"
-          canvas.isDrawingMode = false
-          break
-        case "add-objects":
-          canvas.selection = false
-          canvas.defaultCursor = "copy"
-          canvas.hoverCursor = "copy"
-          canvas.isDrawingMode = false
-          break
-      }
-      canvas.renderAll()
-    }
-    set({ activeTool: tool })
-  },
+  setActiveTool: (tool) => set({ activeTool: tool }),
 
-  // Selection state
+  // Selection
   selectedObjects: [],
   setSelectedObjects: (objects) => set({ selectedObjects: objects }),
-  selectedCount: 0,
-  setSelectedCount: (count) => set({ selectedCount: count }),
-  activeSelection: null,
-  setActiveSelection: (selection) => set({ activeSelection: selection }),
 
-  // Inspector state
-  inspectorType: "none",
-  setInspectorType: (type) => set({ inspectorType: type }),
+  // Categories
+  seatCategories: [
+    { id: "standard", name: "Standard", color: "#10B981", price: 50, description: "Regular seating" },
+    { id: "premium", name: "Premium", color: "#F59E0B", price: 75, description: "Enhanced comfort" },
+    { id: "vip", name: "VIP", color: "#EF4444", price: 100, description: "Exclusive seating" },
+  ],
 
-  // Drawing state
-  isDrawing: false,
-  setIsDrawing: (drawing) => set({ isDrawing: drawing }),
-  currentSeatType: "standard",
-  setCurrentSeatType: (type) => set({ currentSeatType: type }),
+  addSeatCategory: (category) =>
+    set((state) => ({
+      seatCategories: [...state.seatCategories, category],
+    })),
 
-  // Grid and snapping
-  snapToGrid: true,
-  setSnapToGrid: (snap) => set({ snapToGrid: snap }),
-  gridSize: 20,
-  setGridSize: (size) => set({ gridSize: size }),
+  updateSeatCategory: (id, updates) =>
+    set((state) => ({
+      seatCategories: state.seatCategories.map((cat) => (cat.id === id ? { ...cat, ...updates } : cat)),
+    })),
 
-  // Canvas properties
-  zoom: 1,
-  setZoom: (zoom) => set({ zoom }),
+  deleteSeatCategory: (id) =>
+    set((state) => ({
+      seatCategories: state.seatCategories.filter((cat) => cat.id !== id),
+    })),
 
-  // Map properties
-  mapName: "Main Theater - Floor Plan",
-  setMapName: (name) => set({ mapName: name }),
+  // UI State
+  showGrid: true,
+  setShowGrid: (show) => set({ showGrid: show }),
+  showLayersPanel: false,
+  setShowLayersPanel: (show) => set({ showLayersPanel: show }),
+  showCategoriesModal: false,
+  setShowCategoriesModal: (show) => set({ showCategoriesModal: show }),
 
   // History
   history: [],
   historyIndex: -1,
-  addToHistory: (state) => {
-    const { history, historyIndex } = get()
-    const newHistory = history.slice(0, historyIndex + 1)
-    newHistory.push(state)
-    set({
-      history: newHistory,
-      historyIndex: newHistory.length - 1,
-      canUndo: true,
-      canRedo: false,
-    })
-  },
+  canUndo: false,
+  canRedo: false,
+
+  addToHistory: (state) =>
+    set((current) => {
+      const newHistory = current.history.slice(0, current.historyIndex + 1)
+      newHistory.push(state)
+      return {
+        history: newHistory,
+        historyIndex: newHistory.length - 1,
+        canUndo: true,
+        canRedo: false,
+      }
+    }),
+
   undo: () => {
     const { canvas, history, historyIndex } = get()
     if (canvas && historyIndex > 0) {
@@ -156,12 +181,13 @@ export const useSeatMapStore = create<SeatMapState>((set, get) => ({
         canvas.renderAll()
         set({
           historyIndex: historyIndex - 1,
-          canUndo: historyIndex > 1,
+          canUndo: historyIndex - 1 > 0,
           canRedo: true,
         })
       })
     }
   },
+
   redo: () => {
     const { canvas, history, historyIndex } = get()
     if (canvas && historyIndex < history.length - 1) {
@@ -171,58 +197,171 @@ export const useSeatMapStore = create<SeatMapState>((set, get) => ({
         set({
           historyIndex: historyIndex + 1,
           canUndo: true,
-          canRedo: historyIndex < history.length - 2,
+          canRedo: historyIndex + 1 < history.length - 1,
         })
       })
     }
   },
-  canUndo: false,
-  canRedo: false,
 
-  // Object update methods
-  updateSelectedObject: (properties) => {
-    const { canvas, activeSelection } = get()
-    if (!canvas || !activeSelection) return
+  // Zoom and Pan
+  zoomLevel: 1,
+  setZoomLevel: (zoom) => set({ zoomLevel: zoom }),
+  panX: 0,
+  panY: 0,
+  setPan: (x, y) => set({ panX: x, panY: y }),
 
-    // Update the object properties
-    activeSelection.set(properties)
+  // Snap settings
+  snapToGrid: true,
+  setSnapToGrid: (snap) => set({ snapToGrid: snap }),
+  gridSize: 20,
+  setGridSize: (size) => set({ gridSize: size }),
 
-    // If it's a group, update the group and its objects
-    if (activeSelection.type === "group" || activeSelection.type === "activeSelection") {
-      const group = activeSelection as fabric.Group
-      if (group.getObjects) {
-        group.getObjects().forEach((obj: any) => {
-          // Update specific properties that should cascade to children
-          if (properties.fill && obj.type === "rect") {
-            obj.set({ fill: properties.fill })
-          }
-        })
-      }
-    }
-
-    activeSelection.setCoords()
-    canvas.renderAll()
-
-    // Add to history after a short delay to avoid too many history entries
-    setTimeout(() => {
-      get().addToHistory(JSON.stringify(canvas.toJSON()))
-    }, 500)
-  },
-
-  updateSelectedObjects: (properties) => {
-    const { canvas, selectedObjects } = get()
+  // Object operations
+  duplicateSelectedObjects: () => {
+    const { canvas, selectedObjects, addToHistory } = get()
     if (!canvas || selectedObjects.length === 0) return
 
     selectedObjects.forEach((obj) => {
-      obj.set(properties)
+      obj.clone((cloned: fabric.Object) => {
+        cloned.set({
+          left: (cloned.left || 0) + 20,
+          top: (cloned.top || 0) + 20,
+        })
+        canvas.add(cloned)
+      })
+    })
+
+    canvas.renderAll()
+    addToHistory(JSON.stringify(canvas.toJSON()))
+  },
+
+  deleteSelectedObjects: () => {
+    const { canvas, selectedObjects, addToHistory } = get()
+    if (!canvas || selectedObjects.length === 0) return
+
+    selectedObjects.forEach((obj) => {
+      canvas.remove(obj)
+    })
+
+    set({ selectedObjects: [] })
+    canvas.renderAll()
+    addToHistory(JSON.stringify(canvas.toJSON()))
+  },
+
+  groupSelectedObjects: () => {
+    const { canvas, selectedObjects, addToHistory } = get()
+    if (!canvas || selectedObjects.length < 2) return
+
+    const group = new fabric.Group(selectedObjects, {
+      left: 0,
+      top: 0,
+    })
+
+    selectedObjects.forEach((obj) => canvas.remove(obj))
+    canvas.add(group)
+    canvas.setActiveObject(group)
+    canvas.renderAll()
+    addToHistory(JSON.stringify(canvas.toJSON()))
+  },
+
+  ungroupSelectedObjects: () => {
+    const { canvas, selectedObjects, addToHistory } = get()
+    if (!canvas || selectedObjects.length !== 1) return
+
+    const group = selectedObjects[0] as fabric.Group
+    if (group.type !== "group") return
+
+    const objects = group.getObjects()
+    group.destroy()
+    canvas.remove(group)
+
+    objects.forEach((obj) => {
+      canvas.add(obj)
+    })
+
+    canvas.renderAll()
+    addToHistory(JSON.stringify(canvas.toJSON()))
+  },
+
+  alignObjects: (alignment) => {
+    const { canvas, selectedObjects } = get()
+    if (!canvas || selectedObjects.length < 2) return
+
+    let minLeft = Number.POSITIVE_INFINITY
+    let maxRight = Number.NEGATIVE_INFINITY
+    let minTop = Number.POSITIVE_INFINITY
+    let maxBottom = Number.NEGATIVE_INFINITY
+
+    selectedObjects.forEach((obj) => {
+      const bounds = obj.getBoundingRect()
+      minLeft = Math.min(minLeft, bounds.left)
+      maxRight = Math.max(maxRight, bounds.left + bounds.width)
+      minTop = Math.min(minTop, bounds.top)
+      maxBottom = Math.max(maxBottom, bounds.top + bounds.height)
+    })
+
+    selectedObjects.forEach((obj) => {
+      const bounds = obj.getBoundingRect()
+
+      switch (alignment) {
+        case "left":
+          obj.set({ left: minLeft })
+          break
+        case "center":
+          obj.set({ left: minLeft + (maxRight - minLeft) / 2 - bounds.width / 2 })
+          break
+        case "right":
+          obj.set({ left: maxRight - bounds.width })
+          break
+        case "top":
+          obj.set({ top: minTop })
+          break
+        case "middle":
+          obj.set({ top: minTop + (maxBottom - minTop) / 2 - bounds.height / 2 })
+          break
+        case "bottom":
+          obj.set({ top: maxBottom - bounds.height })
+          break
+      }
+
       obj.setCoords()
     })
 
     canvas.renderAll()
-
-    // Add to history after a short delay
-    setTimeout(() => {
-      get().addToHistory(JSON.stringify(canvas.toJSON()))
-    }, 500)
   },
+
+  updateSelectedObject: (properties) => {
+    const { canvas, selectedObjects } = get()
+    if (!canvas || selectedObjects.length !== 1) return
+
+    const obj = selectedObjects[0]
+    obj.set(properties)
+    obj.setCoords()
+    canvas.renderAll()
+  },
+
+  // Layers
+  layers: [],
+  setLayers: (layers) => set({ layers }),
+
+  toggleLayerVisibility: (object) => {
+    const { canvas } = get()
+    if (!canvas) return
+
+    object.set({ visible: !object.visible })
+    canvas.renderAll()
+  },
+
+  toggleLayerLock: (object) => {
+    object.set({
+      selectable: !object.selectable,
+      evented: !object.evented,
+    })
+  },
+
+  // Drawing state
+  isDrawing: false,
+  setIsDrawing: (drawing) => set({ isDrawing: drawing }),
+  currentPath: null,
+  setCurrentPath: (path) => set({ currentPath: path }),
 }))

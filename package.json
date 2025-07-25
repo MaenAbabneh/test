@@ -1,5 +1,5 @@
 {
-  "name": "seat-map-editor",
+  "name": "seat-map-dashboard",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -41,7 +41,6 @@
     "cmdk": "latest",
     "embla-carousel-react": "latest",
     "fabric": "latest",
-    "geist": "latest",
     "immer": "latest",
     "input-otp": "latest",
     "lucide-react": "^0.454.0",
@@ -64,11 +63,11 @@
     "@types/node": "^22",
     "@types/react": "^18",
     "@types/react-dom": "^18",
-    "autoprefixer": "^10",
+    "autoprefixer": "^10.0.1",
     "eslint": "^8",
-    "eslint-config-next": "14.0.0",
+    "eslint-config-next": "14.0.4",
     "postcss": "^8.5",
-    "tailwindcss": "^3",
+    "tailwindcss": "^3.3.0",
     "typescript": "^5"
   }
 }
