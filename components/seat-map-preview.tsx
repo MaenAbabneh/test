@@ -2,19 +2,21 @@
 
 import { useEffect, useRef, useState, useMemo } from "react"
 import { fabric } from "fabric"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { ZoomIn, ZoomOut, RotateCcw } from "lucide-react"
+import { ZoomIn, ZoomOut, RotateCcw, Maximize, Eye, EyeOff } from "lucide-react"
 import { useSeatMapStore } from "@/lib/store"
 
 export function SeatMapPreview() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  const { canvasState, seatCategories, zoom, setZoom } = useSeatMapStore()
+  const { canvasState, seatCategories } = useSeatMapStore()
 
   const [previewCanvas, setPreviewCanvas] = useState<fabric.Canvas | null>(null)
   const [isCanvasReady, setIsCanvasReady] = useState(false)
+  const [zoom, setZoom] = useState(1)
+  const [showPrices, setShowPrices] = useState(true)
 
   // Initialize preview canvas
   useEffect(() => {
@@ -23,17 +25,61 @@ export function SeatMapPreview() {
     const initCanvas = () => {
       try {
         const fabricCanvas = new fabric.Canvas(canvasRef.current!, {
-          width: 800,
-          height: 500,
-          backgroundColor: "#ffffff",
-          selection: false, // Disable selection in preview
-          interactive: false, // Make it read-only
+          width: 1000,
+          height: 700,
+          backgroundColor: "#f8fafc",
+          selection: false,
+          interactive: false,
         })
 
-        // Disable all interactions
+        // Disable all interactions for preview
         fabricCanvas.forEachObject((obj) => {
           obj.selectable = false
           obj.evented = false
+        })
+
+        // Enable mouse wheel zoom
+        fabricCanvas.on("mouse:wheel", (opt) => {
+          const delta = opt.e.deltaY
+          let newZoom = fabricCanvas.getZoom()
+          newZoom *= 0.999 ** delta
+          if (newZoom > 3) newZoom = 3
+          if (newZoom < 0.3) newZoom = 0.3
+          fabricCanvas.zoomToPoint({ x: opt.e.offsetX, y: opt.e.offsetY }, newZoom)
+          setZoom(newZoom)
+          opt.e.preventDefault()
+          opt.e.stopPropagation()
+        })
+
+        // Enable panning
+        let isDragging = false
+        let lastPosX = 0
+        let lastPosY = 0
+
+        fabricCanvas.on("mouse:down", (opt) => {
+          const evt = opt.e
+          isDragging = true
+          fabricCanvas.selection = false
+          lastPosX = evt.clientX
+          lastPosY = evt.clientY
+        })
+
+        fabricCanvas.on("mouse:move", (opt) => {
+          if (isDragging) {
+            const e = opt.e
+            const vpt = fabricCanvas.viewportTransform!
+            vpt[4] += e.clientX - lastPosX
+            vpt[5] += e.clientY - lastPosY
+            fabricCanvas.requestRenderAll()
+            lastPosX = e.clientX
+            lastPosY = e.clientY
+          }
+        })
+
+        fabricCanvas.on("mouse:up", () => {
+          fabricCanvas.setViewportTransform(fabricCanvas.viewportTransform!)
+          isDragging = false
+          fabricCanvas.selection = false
         })
 
         setPreviewCanvas(fabricCanvas)
@@ -46,19 +92,8 @@ export function SeatMapPreview() {
       }
     }
 
-    // Use timeout to ensure DOM is ready
     const timeoutId = setTimeout(() => {
-      const fabricCanvas = initCanvas()
-
-      return () => {
-        if (fabricCanvas) {
-          try {
-            fabricCanvas.dispose()
-          } catch (error) {
-            console.warn("Error disposing preview canvas:", error)
-          }
-        }
-      }
+      initCanvas()
     }, 100)
 
     return () => {
@@ -121,6 +156,58 @@ export function SeatMapPreview() {
     }
   }
 
+  const fitToScreen = () => {
+    if (!previewCanvas || !isCanvasReady) return
+    try {
+      const objects = previewCanvas.getObjects().filter((obj) => !(obj as any).isGrid)
+      if (objects.length === 0) return
+
+      // Calculate bounding box
+      let minX = Number.POSITIVE_INFINITY,
+        minY = Number.POSITIVE_INFINITY,
+        maxX = Number.NEGATIVE_INFINITY,
+        maxY = Number.NEGATIVE_INFINITY
+
+      objects.forEach((obj) => {
+        const bounds = obj.getBoundingRect()
+        minX = Math.min(minX, bounds.left)
+        minY = Math.min(minY, bounds.top)
+        maxX = Math.max(maxX, bounds.left + bounds.width)
+        maxY = Math.max(maxY, bounds.top + bounds.height)
+      })
+
+      const objectWidth = maxX - minX
+      const objectHeight = maxY - minY
+      const canvasWidth = previewCanvas.getWidth()
+      const canvasHeight = previewCanvas.getHeight()
+
+      const padding = 50
+      const zoomX = (canvasWidth - padding * 2) / objectWidth
+      const zoomY = (canvasHeight - padding * 2) / objectHeight
+      const newZoom = Math.min(zoomX, zoomY, 2)
+
+      const centerX = (minX + maxX) / 2
+      const centerY = (minY + maxY) / 2
+      const canvasCenterX = canvasWidth / 2
+      const canvasCenterY = canvasHeight / 2
+
+      previewCanvas.setZoom(newZoom)
+      previewCanvas.setViewportTransform([
+        newZoom,
+        0,
+        0,
+        newZoom,
+        canvasCenterX - centerX * newZoom,
+        canvasCenterY - centerY * newZoom,
+      ])
+
+      setZoom(newZoom)
+      previewCanvas.renderAll()
+    } catch (error) {
+      console.warn("Error fitting to screen:", error)
+    }
+  }
+
   // Calculate seat statistics
   const seatStats = useMemo(() => {
     if (!canvasState) return { total: 0, available: 0, occupied: 0 }
@@ -152,139 +239,158 @@ export function SeatMapPreview() {
     }
   }, [canvasState, seatCategories])
 
+  const totalRevenue = useMemo(() => {
+    if (!canvasState) return 0
+    try {
+      const canvasData = JSON.parse(canvasState)
+      const seats = canvasData.objects?.filter((obj: any) => obj.seatData) || []
+      return seats.reduce((total: number, seat: any) => {
+        return total + (seat.seatData?.price || 0)
+      }, 0)
+    } catch {
+      return 0
+    }
+  }, [canvasState])
+
   return (
-    <div className="h-screen flex bg-background">
-      {/* Main Preview Area - 75% */}
-      <div className="flex-1 w-3/4 flex flex-col">
-        {/* Header */}
-        <div className="h-14 bg-card border-b border-border flex items-center px-4">
-          <h1 className="text-lg font-semibold">Seat Map Preview</h1>
-          <div className="ml-auto text-sm text-muted-foreground">Real-time preview • Updates automatically</div>
-        </div>
-
+    <div className="h-screen flex bg-gray-50">
+      {/* Main Preview Area */}
+      <div className="flex-1 flex flex-col">
         {/* Canvas Container */}
-        <div ref={containerRef} className="flex-1 bg-muted/20 p-4 overflow-hidden">
-          <div className="w-full h-full flex items-center justify-center">
-            <div className="relative bg-white rounded-lg shadow-lg">
-              <canvas ref={canvasRef} className="rounded-lg" />
+        <div ref={containerRef} className="flex-1 relative overflow-hidden">
+          <div className="w-full h-full flex items-center justify-center p-8">
+            <div className="relative bg-white rounded-xl shadow-2xl border border-gray-200">
+              <canvas ref={canvasRef} className="rounded-xl" />
 
-              {/* Zoom Controls */}
-              <Card className="absolute bottom-4 right-4">
+              {/* Zoom Controls - Top Right */}
+              <Card className="absolute top-4 right-4 shadow-lg">
                 <CardContent className="p-2">
-                  <div className="flex items-center space-x-1">
-                    <Button variant="ghost" size="icon" onClick={zoomOut}>
-                      <ZoomOut className="h-4 w-4" />
+                  <div className="flex flex-col space-y-1">
+                    <Button variant="ghost" size="icon" className="h-10 w-10 hover:bg-blue-50" onClick={zoomIn}>
+                      <ZoomIn className="h-5 w-5" />
                     </Button>
-                    <span className="text-sm font-mono w-12 text-center">{Math.round(zoom * 100)}%</span>
-                    <Button variant="ghost" size="icon" onClick={zoomIn}>
-                      <ZoomIn className="h-4 w-4" />
+
+                    <Button variant="ghost" size="icon" className="h-10 w-10 hover:bg-blue-50" onClick={zoomOut}>
+                      <ZoomOut className="h-5 w-5" />
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={resetZoom}>
-                      <RotateCcw className="h-4 w-4" />
+
+                    <Button variant="ghost" size="icon" className="h-10 w-10 hover:bg-blue-50" onClick={resetZoom}>
+                      <RotateCcw className="h-5 w-5" />
+                    </Button>
+
+                    <Button variant="ghost" size="icon" className="h-10 w-10 hover:bg-blue-50" onClick={fitToScreen}>
+                      <Maximize className="h-5 w-5" />
                     </Button>
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Zoom Level Indicator */}
+              <div className="absolute bottom-4 right-4 bg-black/80 text-white px-3 py-1 rounded-lg text-sm font-mono">
+                {Math.round(zoom * 100)}%
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Sidebar - 25% */}
-      <div className="w-1/4 min-w-[300px] bg-card border-l border-border p-4 space-y-4">
-        {/* Seat Legend */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Seat Legend & Prices</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {seatCategories.map((category) => (
-              <div key={category.id} className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: category.color }} />
-                  <span className="text-sm font-medium">{category.name}</span>
+      {/* Left Sidebar - Pricing Panel */}
+      <Card className="w-80 m-4 shadow-lg">
+        <CardContent className="p-6 space-y-6">
+          {/* Hide Prices Toggle */}
+          <div className="flex items-center justify-between">
+            <Button
+              variant={showPrices ? "default" : "outline"}
+              className="bg-cyan-500 hover:bg-cyan-600 text-white"
+              onClick={() => setShowPrices(!showPrices)}
+            >
+              {showPrices ? <EyeOff className="h-4 w-4 mr-2" /> : <Eye className="h-4 w-4 mr-2" />}
+              {showPrices ? "Hide Prices" : "Show Prices"}
+            </Button>
+          </div>
+
+          {/* Seat Categories with Prices */}
+          {showPrices && (
+            <div className="space-y-3">
+              {seatCategories.map((category, index) => (
+                <div key={category.id} className="flex items-center justify-between py-2">
+                  <div className="flex items-center space-x-3">
+                    <div
+                      className="w-4 h-4 rounded-full border-2 border-white shadow-sm"
+                      style={{ backgroundColor: category.color }}
+                    />
+                    <span className="font-medium text-gray-800">{category.name}:</span>
+                  </div>
+                  <span className="font-bold text-gray-900">{categorySeatsMap[index]} JOD</span>
                 </div>
-                <span className="text-sm font-semibold text-primary">${category.price}</span>
-              </div>
-            ))}
+              ))}
+            </div>
+          )}
 
-            <div className="pt-3 border-t border-border space-y-2">
-              <div className="flex items-center space-x-3">
-                <div className="w-4 h-4 border-2 border-muted-foreground rounded-full flex-shrink-0" />
-                <span className="text-sm text-muted-foreground">Available</span>
-              </div>
-              <div className="flex items-center space-x-3">
-                <div className="w-4 h-4 bg-red-500 rounded-full flex-shrink-0" />
-                <span className="text-sm text-muted-foreground">Occupied</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+          {/* Statistics */}
+          <div className="border-t pt-4 space-y-3">
+            <h3 className="font-semibold text-gray-800">Statistics</h3>
 
-        {/* Statistics */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Statistics</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Total Seats:</span>
-              <span className="font-medium">{seatStats.total}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Available:</span>
-              <span className="font-medium text-green-600">{seatStats.available}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Occupied:</span>
-              <span className="font-medium text-red-600">{seatStats.occupied}</span>
-            </div>
-            <div className="flex justify-between text-sm pt-2 border-t border-border">
-              <span className="text-muted-foreground">Occupancy Rate:</span>
-              <span className="font-medium">
-                {seatStats.total > 0 ? Math.round((seatStats.occupied / seatStats.total) * 100) : 0}%
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Revenue Information */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Revenue Potential</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {seatCategories.map((category, index) => (
-              <div key={category.id} className="flex justify-between text-sm">
-                <span className="text-muted-foreground">
-                  {category.name} ({categorySeatsMap[index]} seats):
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-600">Total Seats:</span>
+                <span className="font-medium">{seatStats.total}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Available:</span>
+                <span className="font-medium text-green-600">{seatStats.available}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Occupied:</span>
+                <span className="font-medium text-red-600">{seatStats.occupied}</span>
+              </div>
+              <div className="flex justify-between pt-2 border-t">
+                <span className="text-gray-600">Occupancy Rate:</span>
+                <span className="font-medium">
+                  {seatStats.total > 0 ? Math.round((seatStats.occupied / seatStats.total) * 100) : 0}%
                 </span>
-                <span className="font-medium">${(categorySeatsMap[index] * category.price).toLocaleString()}</span>
               </div>
-            ))}
-
-            <div className="flex justify-between text-sm pt-2 border-t border-border font-semibold">
-              <span>Total Potential:</span>
-              <span className="text-primary">
-                ${useMemo(() => {
-                  if (!canvasState) return 0
-                  try {
-                    const canvasData = JSON.parse(canvasState)
-                    const seats = canvasData.objects?.filter((obj: any) => obj.seatData) || []
-                    return seats
-                      .reduce((total: number, seat: any) => {
-                        return total + (seat.seatData?.price || 0)
-                      }, 0)
-                      .toLocaleString()
-                  } catch {
-                    return 0
-                  }
-                }, [canvasState])}
-              </span>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+
+          {/* Revenue Information */}
+          <div className="border-t pt-4 space-y-3">
+            <h3 className="font-semibold text-gray-800">Revenue Potential</h3>
+
+            <div className="space-y-2 text-sm">
+              {seatCategories.map((category, index) => (
+                <div key={category.id} className="flex justify-between">
+                  <span className="text-gray-600">
+                    {category.name} ({categorySeatsMap[index]} seats):
+                  </span>
+                  <span className="font-medium">${(categorySeatsMap[index] * category.price).toLocaleString()}</span>
+                </div>
+              ))}
+
+              <div className="flex justify-between pt-2 border-t font-semibold">
+                <span>Total Potential:</span>
+                <span className="text-green-600">${totalRevenue.toLocaleString()}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Legend */}
+          <div className="border-t pt-4 space-y-3">
+            <h3 className="font-semibold text-gray-800">Legend</h3>
+
+            <div className="space-y-2 text-sm">
+              <div className="flex items-center space-x-3">
+                <div className="w-4 h-4 border-2 border-gray-400 rounded-full bg-white" />
+                <span className="text-gray-600">Available</span>
+              </div>
+              <div className="flex items-center space-x-3">
+                <div className="w-4 h-4 bg-red-500 rounded-full" />
+                <span className="text-gray-600">Occupied</span>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }

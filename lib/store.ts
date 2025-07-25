@@ -46,6 +46,12 @@ interface SeatMapState {
   // Canvas
   canvas: fabric.Canvas | null
   setCanvas: (canvas: fabric.Canvas | null) => void
+  canvasState: string | null
+  setCanvasState: (state: string) => void
+
+  // Map metadata
+  mapName: string
+  setMapName: (name: string) => void
 
   // Tools
   activeTool: ToolType
@@ -54,6 +60,9 @@ interface SeatMapState {
   // Selection
   selectedObjects: fabric.Object[]
   setSelectedObjects: (objects: fabric.Object[]) => void
+  selectedCount: number
+  activeSelection: fabric.Object | null
+  setActiveSelection: (selection: fabric.Object | null) => void
 
   // Categories
   seatCategories: SeatCategory[]
@@ -81,6 +90,8 @@ interface SeatMapState {
   // Zoom and Pan
   zoomLevel: number
   setZoomLevel: (zoom: number) => void
+  zoom: number
+  setZoom: (zoom: number) => void
   panX: number
   panY: number
   setPan: (x: number, y: number) => void
@@ -110,12 +121,22 @@ interface SeatMapState {
   setIsDrawing: (drawing: boolean) => void
   currentPath: fabric.Path | null
   setCurrentPath: (path: fabric.Path | null) => void
+
+  // Save/Load
+  saveCanvasData: () => string
+  loadCanvasData: (data: string) => void
 }
 
 export const useSeatMapStore = create<SeatMapState>((set, get) => ({
   // Canvas
   canvas: null,
   setCanvas: (canvas) => set({ canvas }),
+  canvasState: null,
+  setCanvasState: (state) => set({ canvasState: state }),
+
+  // Map metadata
+  mapName: "Untitled Seat Map",
+  setMapName: (name) => set({ mapName: name }),
 
   // Tools
   activeTool: "select",
@@ -123,13 +144,20 @@ export const useSeatMapStore = create<SeatMapState>((set, get) => ({
 
   // Selection
   selectedObjects: [],
-  setSelectedObjects: (objects) => set({ selectedObjects: objects }),
+  setSelectedObjects: (objects) =>
+    set({
+      selectedObjects: objects,
+      selectedCount: objects.length,
+    }),
+  selectedCount: 0,
+  activeSelection: null,
+  setActiveSelection: (selection) => set({ activeSelection: selection }),
 
   // Categories
   seatCategories: [
-    { id: "standard", name: "Standard", color: "#10B981", price: 50, description: "Regular seating" },
-    { id: "premium", name: "Premium", color: "#F59E0B", price: 75, description: "Enhanced comfort" },
-    { id: "vip", name: "VIP", color: "#EF4444", price: 100, description: "Exclusive seating" },
+    { id: "vip", name: "VIP Class", color: "#F59E0B", price: 35, description: "Premium seating with best view" },
+    { id: "class-a", name: "Class A", color: "#06B6D4", price: 25, description: "Great seats with good view" },
+    { id: "class-b", name: "Class B", color: "#EC4899", price: 15, description: "Standard seating" },
   ],
 
   addSeatCategory: (category) =>
@@ -206,6 +234,8 @@ export const useSeatMapStore = create<SeatMapState>((set, get) => ({
   // Zoom and Pan
   zoomLevel: 1,
   setZoomLevel: (zoom) => set({ zoomLevel: zoom }),
+  zoom: 1,
+  setZoom: (zoom) => set({ zoom }),
   panX: 0,
   panY: 0,
   setPan: (x, y) => set({ panX: x, panY: y }),
@@ -243,7 +273,7 @@ export const useSeatMapStore = create<SeatMapState>((set, get) => ({
       canvas.remove(obj)
     })
 
-    set({ selectedObjects: [] })
+    set({ selectedObjects: [], selectedCount: 0 })
     canvas.renderAll()
     addToHistory(JSON.stringify(canvas.toJSON()))
   },
@@ -364,4 +394,24 @@ export const useSeatMapStore = create<SeatMapState>((set, get) => ({
   setIsDrawing: (drawing) => set({ isDrawing: drawing }),
   currentPath: null,
   setCurrentPath: (path) => set({ currentPath: path }),
+
+  // Save/Load
+  saveCanvasData: () => {
+    const { canvas } = get()
+    if (!canvas) return ""
+    return JSON.stringify(canvas.toJSON())
+  },
+
+  loadCanvasData: (data) => {
+    const { canvas } = get()
+    if (!canvas || !data) return
+
+    try {
+      canvas.loadFromJSON(data, () => {
+        canvas.renderAll()
+      })
+    } catch (error) {
+      console.error("Failed to load canvas data:", error)
+    }
+  },
 }))

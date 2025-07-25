@@ -1,20 +1,18 @@
 "use client"
 
+import React from "react"
+
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import {
-  MousePointer,
+  MousePointer2,
   Circle,
   Square,
   Type,
-  Grid3X3,
-  Save,
-  Download,
   Layers,
-  Settings,
-  Undo,
-  Redo,
+  RotateCcw,
   Copy,
   Trash2,
   Group,
@@ -25,10 +23,12 @@ import {
   AlignCenterIcon as AlignTop,
   AlignCenterIcon as AlignMiddle,
   AlignCenterIcon as AlignBottom,
-  RotateCw,
+  Grid3X3,
+  Palette,
 } from "lucide-react"
 import { useSeatMapStore } from "@/lib/store"
-import { exportCanvasAsImage } from "@/lib/fabric-utils"
+import { createSeat, createStage, createText, createCurvedRow } from "@/lib/fabric-utils"
+import type { fabric } from "fabric"
 
 export function ToolbarPanel() {
   const {
@@ -36,259 +36,305 @@ export function ToolbarPanel() {
     setActiveTool,
     canvas,
     selectedObjects,
-    showGrid,
-    setShowGrid,
-    showLayersPanel,
-    setShowLayersPanel,
-    setShowCategoriesModal,
-    canUndo,
-    canRedo,
-    undo,
-    redo,
     duplicateSelectedObjects,
     deleteSelectedObjects,
     groupSelectedObjects,
     ungroupSelectedObjects,
     alignObjects,
-    addToHistory,
+    showGrid,
+    setShowGrid,
+    showLayersPanel,
+    setShowLayersPanel,
+    setShowCategoriesModal,
+    seatCategories,
   } = useSeatMapStore()
 
-  const handleSave = () => {
-    if (canvas) {
-      const state = JSON.stringify(canvas.toJSON())
-      addToHistory(state)
-      // Here you could also save to localStorage or send to server
-      console.log("Canvas saved")
+  const handleToolClick = (tool: string) => {
+    setActiveTool(tool as any)
+
+    if (!canvas) return
+
+    // Reset canvas cursor and selection mode
+    canvas.defaultCursor = "default"
+    canvas.hoverCursor = "move"
+    canvas.selection = tool === "select"
+
+    // Handle tool-specific setup
+    switch (tool) {
+      case "select":
+        canvas.isDrawingMode = false
+        break
+      case "seat":
+        canvas.isDrawingMode = false
+        canvas.defaultCursor = "crosshair"
+        break
+      case "stage":
+        canvas.isDrawingMode = false
+        canvas.defaultCursor = "crosshair"
+        break
+      case "text":
+        canvas.isDrawingMode = false
+        canvas.defaultCursor = "text"
+        break
+      case "curved-row":
+        canvas.isDrawingMode = false
+        canvas.defaultCursor = "crosshair"
+        break
     }
   }
 
-  const handleExport = () => {
-    if (canvas) {
-      const dataURL = exportCanvasAsImage(canvas, "png")
-      const link = document.createElement("a")
-      link.download = "seat-map.png"
-      link.href = dataURL
-      link.click()
+  const handleCanvasClick = (e: fabric.IEvent) => {
+    if (!canvas || activeTool === "select") return
+
+    const pointer = canvas.getPointer(e.e)
+    const defaultCategory = seatCategories[0]
+
+    switch (activeTool) {
+      case "seat":
+        const seat = createSeat(pointer.x, pointer.y, defaultCategory)
+        canvas.add(seat)
+        break
+      case "stage":
+        const stage = createStage(pointer.x, pointer.y)
+        canvas.add(stage)
+        break
+      case "text":
+        const text = createText(pointer.x, pointer.y, "Text")
+        canvas.add(text)
+        break
+      case "curved-row":
+        const curvedRow = createCurvedRow(pointer.x, pointer.y, 100, 0, Math.PI, 8, defaultCategory)
+        canvas.add(curvedRow)
+        break
     }
+
+    canvas.renderAll()
   }
 
-  const canGroup = selectedObjects.length > 1
-  const canUngroup = selectedObjects.length === 1 && selectedObjects[0].type === "group"
-  const canAlign = selectedObjects.length > 1
+  // Set up canvas click handler
+  React.useEffect(() => {
+    if (!canvas) return
+
+    canvas.on("mouse:down", handleCanvasClick)
+    return () => canvas.off("mouse:down", handleCanvasClick)
+  }, [canvas, activeTool, seatCategories])
+
+  const tools = [
+    { id: "select", icon: MousePointer2, label: "Select", shortcut: "V" },
+    { id: "seat", icon: Circle, label: "Add Seat", shortcut: "S" },
+    { id: "stage", icon: Square, label: "Add Stage", shortcut: "T" },
+    { id: "text", icon: Type, label: "Add Text", shortcut: "X" },
+    { id: "curved-row", icon: RotateCcw, label: "Curved Row", shortcut: "C" },
+  ]
+
+  const alignmentTools = [
+    { id: "left", icon: AlignLeft, label: "Align Left" },
+    { id: "center", icon: AlignCenter, label: "Align Center" },
+    { id: "right", icon: AlignRight, label: "Align Right" },
+    { id: "top", icon: AlignTop, label: "Align Top" },
+    { id: "middle", icon: AlignMiddle, label: "Align Middle" },
+    { id: "bottom", icon: AlignBottom, label: "Align Bottom" },
+  ]
 
   return (
-    <div className="w-16 bg-card border-r border-border flex flex-col items-center py-4 space-y-2">
-      {/* Selection Tools */}
-      <Button
-        variant={activeTool === "select" ? "default" : "ghost"}
-        size="icon"
-        onClick={() => setActiveTool("select")}
-        title="Select Tool (V)"
-      >
-        <MousePointer className="h-4 w-4" />
-      </Button>
-
-      <Separator className="w-8" />
-
-      {/* Drawing Tools */}
-      <Button
-        variant={activeTool === "seat" ? "default" : "ghost"}
-        size="icon"
-        onClick={() => setActiveTool("seat")}
-        title="Add Seat (S)"
-      >
-        <Circle className="h-4 w-4" />
-      </Button>
-
-      <Button
-        variant={activeTool === "stage" ? "default" : "ghost"}
-        size="icon"
-        onClick={() => setActiveTool("stage")}
-        title="Add Stage (T)"
-      >
-        <Square className="h-4 w-4" />
-      </Button>
-
-      <Button
-        variant={activeTool === "text" ? "default" : "ghost"}
-        size="icon"
-        onClick={() => setActiveTool("text")}
-        title="Add Text (X)"
-      >
-        <Type className="h-4 w-4" />
-      </Button>
-
-      <Button
-        variant={activeTool === "curved-row" ? "default" : "ghost"}
-        size="icon"
-        onClick={() => setActiveTool("curved-row")}
-        title="Curved Row"
-      >
-        <RotateCw className="h-4 w-4" />
-      </Button>
-
-      <Separator className="w-8" />
-
-      {/* History */}
-      <Button variant="ghost" size="icon" onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)">
-        <Undo className="h-4 w-4" />
-      </Button>
-
-      <Button variant="ghost" size="icon" onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z)">
-        <Redo className="h-4 w-4" />
-      </Button>
-
-      <Separator className="w-8" />
-
-      {/* Object Operations */}
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={duplicateSelectedObjects}
-        disabled={selectedObjects.length === 0}
-        title="Duplicate (Ctrl+D)"
-      >
-        <Copy className="h-4 w-4" />
-      </Button>
-
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={deleteSelectedObjects}
-        disabled={selectedObjects.length === 0}
-        title="Delete (Del)"
-      >
-        <Trash2 className="h-4 w-4" />
-      </Button>
-
-      <Button variant="ghost" size="icon" onClick={groupSelectedObjects} disabled={!canGroup} title="Group (Ctrl+G)">
-        <Group className="h-4 w-4" />
-      </Button>
-
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={ungroupSelectedObjects}
-        disabled={!canUngroup}
-        title="Ungroup (Ctrl+U)"
-      >
-        <Ungroup className="h-4 w-4" />
-      </Button>
-
-      <Separator className="w-8" />
-
-      {/* Alignment Tools */}
-      <div className="flex flex-col space-y-1">
-        <div className="flex space-x-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => alignObjects("left")}
-            disabled={!canAlign}
-            title="Align Left"
-            className="w-6 h-6 p-0"
-          >
-            <AlignLeft className="h-3 w-3" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => alignObjects("center")}
-            disabled={!canAlign}
-            title="Align Center"
-            className="w-6 h-6 p-0"
-          >
-            <AlignCenter className="h-3 w-3" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => alignObjects("right")}
-            disabled={!canAlign}
-            title="Align Right"
-            className="w-6 h-6 p-0"
-          >
-            <AlignRight className="h-3 w-3" />
-          </Button>
+    <TooltipProvider>
+      <div className="w-16 bg-gray-900 border-r border-gray-700 flex flex-col items-center py-4 space-y-2">
+        {/* Tools */}
+        <div className="space-y-1">
+          {tools.map((tool) => {
+            const Icon = tool.icon
+            return (
+              <Tooltip key={tool.id}>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={activeTool === tool.id ? "default" : "ghost"}
+                    size="icon"
+                    className={`w-12 h-12 ${
+                      activeTool === tool.id
+                        ? "bg-blue-600 text-white"
+                        : "text-gray-400 hover:text-white hover:bg-gray-800"
+                    }`}
+                    onClick={() => handleToolClick(tool.id)}
+                  >
+                    <Icon className="h-5 w-5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="right">
+                  <p>
+                    {tool.label} ({tool.shortcut})
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            )
+          })}
         </div>
-        <div className="flex space-x-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => alignObjects("top")}
-            disabled={!canAlign}
-            title="Align Top"
-            className="w-6 h-6 p-0"
-          >
-            <AlignTop className="h-3 w-3" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => alignObjects("middle")}
-            disabled={!canAlign}
-            title="Align Middle"
-            className="w-6 h-6 p-0"
-          >
-            <AlignMiddle className="h-3 w-3" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => alignObjects("bottom")}
-            disabled={!canAlign}
-            title="Align Bottom"
-            className="w-6 h-6 p-0"
-          >
-            <AlignBottom className="h-3 w-3" />
-          </Button>
+
+        <Separator className="w-8 bg-gray-700" />
+
+        {/* Object Operations */}
+        <div className="space-y-1">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="w-12 h-12 text-gray-400 hover:text-white hover:bg-gray-800"
+                onClick={duplicateSelectedObjects}
+                disabled={selectedObjects.length === 0}
+              >
+                <Copy className="h-5 w-5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              <p>Duplicate (Ctrl+D)</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="w-12 h-12 text-gray-400 hover:text-white hover:bg-gray-800"
+                onClick={deleteSelectedObjects}
+                disabled={selectedObjects.length === 0}
+              >
+                <Trash2 className="h-5 w-5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              <p>Delete (Del)</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="w-12 h-12 text-gray-400 hover:text-white hover:bg-gray-800"
+                onClick={groupSelectedObjects}
+                disabled={selectedObjects.length < 2}
+              >
+                <Group className="h-5 w-5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              <p>Group (Ctrl+G)</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="w-12 h-12 text-gray-400 hover:text-white hover:bg-gray-800"
+                onClick={ungroupSelectedObjects}
+                disabled={selectedObjects.length !== 1 || selectedObjects[0]?.type !== "group"}
+              >
+                <Ungroup className="h-5 w-5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              <p>Ungroup (Ctrl+U)</p>
+            </TooltipContent>
+          </Tooltip>
         </div>
+
+        <Separator className="w-8 bg-gray-700" />
+
+        {/* Alignment Tools */}
+        <div className="grid grid-cols-2 gap-1">
+          {alignmentTools.map((tool) => {
+            const Icon = tool.icon
+            return (
+              <Tooltip key={tool.id}>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="w-5 h-5 text-gray-400 hover:text-white hover:bg-gray-800"
+                    onClick={() => alignObjects(tool.id as any)}
+                    disabled={selectedObjects.length < 2}
+                  >
+                    <Icon className="h-3 w-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="right">
+                  <p>{tool.label}</p>
+                </TooltipContent>
+              </Tooltip>
+            )
+          })}
+        </div>
+
+        <Separator className="w-8 bg-gray-700" />
+
+        {/* View Controls */}
+        <div className="space-y-1">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={showGrid ? "default" : "ghost"}
+                size="icon"
+                className={`w-12 h-12 ${
+                  showGrid ? "bg-blue-600 text-white" : "text-gray-400 hover:text-white hover:bg-gray-800"
+                }`}
+                onClick={() => setShowGrid(!showGrid)}
+              >
+                <Grid3X3 className="h-5 w-5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              <p>Toggle Grid (G)</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={showLayersPanel ? "default" : "ghost"}
+                size="icon"
+                className={`w-12 h-12 ${
+                  showLayersPanel ? "bg-blue-600 text-white" : "text-gray-400 hover:text-white hover:bg-gray-800"
+                }`}
+                onClick={() => setShowLayersPanel(!showLayersPanel)}
+              >
+                <Layers className="h-5 w-5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              <p>Toggle Layers</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="w-12 h-12 text-gray-400 hover:text-white hover:bg-gray-800"
+                onClick={() => setShowCategoriesModal(true)}
+              >
+                <Palette className="h-5 w-5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              <p>Seat Categories</p>
+            </TooltipContent>
+          </Tooltip>
+        </div>
+
+        {/* Active Tool Indicator */}
+        {activeTool !== "select" && (
+          <div className="mt-auto">
+            <Badge variant="secondary" className="text-xs">
+              {tools.find((t) => t.id === activeTool)?.label}
+            </Badge>
+          </div>
+        )}
       </div>
-
-      <Separator className="w-8" />
-
-      {/* View Tools */}
-      <Button
-        variant={showGrid ? "default" : "ghost"}
-        size="icon"
-        onClick={() => setShowGrid(!showGrid)}
-        title="Toggle Grid (G)"
-      >
-        <Grid3X3 className="h-4 w-4" />
-      </Button>
-
-      <Button
-        variant={showLayersPanel ? "default" : "ghost"}
-        size="icon"
-        onClick={() => setShowLayersPanel(!showLayersPanel)}
-        title="Toggle Layers Panel"
-      >
-        <Layers className="h-4 w-4" />
-      </Button>
-
-      <Button variant="ghost" size="icon" onClick={() => setShowCategoriesModal(true)} title="Seat Categories">
-        <Settings className="h-4 w-4" />
-      </Button>
-
-      <Separator className="w-8" />
-
-      {/* File Operations */}
-      <Button variant="ghost" size="icon" onClick={handleSave} title="Save (Ctrl+S)">
-        <Save className="h-4 w-4" />
-      </Button>
-
-      <Button variant="ghost" size="icon" onClick={handleExport} title="Export as PNG">
-        <Download className="h-4 w-4" />
-      </Button>
-
-      {/* Selection Count Badge */}
-      {selectedObjects.length > 0 && (
-        <div className="mt-auto">
-          <Badge variant="secondary" className="text-xs">
-            {selectedObjects.length}
-          </Badge>
-        </div>
-      )}
-    </div>
+    </TooltipProvider>
   )
 }
